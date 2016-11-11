@@ -32,7 +32,7 @@ image::moritz_head.png[float="right"]
 
 {blank}
 
-* Moritz Becker, Blaze-Persistence comitter
+* Moritz Becker, Blaze-Persistence committer
 
 --
 
@@ -436,41 +436,233 @@ CTEs can also be combined with pagination and entity-views!
 
 [source,java, role = 'smallcode']
 ----
-public <T> List<T> getCatHierarchy(Integer catId, EntityViewSetting<T, CriteriaBuilder<T>> setting) {
-    CriteriaBuilder<Tuple> cb = cbf.create(emHolder.getEntityManager(), Tuple.class)
-            .withRecursive(CatHierarchyCTE.class)
-                .from(Cat.class)
-                .bind("id").select("id")
-                .bind("motherId").select("mother.id")
-                .bind("fatherId").select("father.id")
-                .bind("generation").select("0")
-                .where("id").eqExpression(catId.toString())
-            .unionAll()
-                .from(Cat.class, "cat")
-                .from(CatHierarchyCTE.class, "cte")
-                .bind("id").select("cat.id")
-                .bind("motherId").select("cat.mother.id")
-                .bind("fatherId").select("cat.father.id")
-                .bind("generation").select("cte.generation + 1")
-                .whereOr()
-                    .where("cat.id").eqExpression("cte.motherId")
-                    .where("cat.id").eqExpression("cte.fatherId")
-                .endOr()
-            .end()
-            .from(Cat.class, "cat")
-            .innerJoinOn(CatHierarchyCTE.class, "cte").on("cte.id").eqExpression("cat.id").end()
-            .orderByAsc("cte.generation");
-
-    return evm.applySetting(setting, cb).getResultList();
-}
+include::listings/CTE.java[]
 ----
 
 Use like:
 
 [source, java, role = 'smallcode']
 ----
-EntityViewSetting<CatView, CriteriaBuilder<CatView>> catSetting = EntityViewSetting.create(CatView.class);
-List<CatView> catHierarchy = getCatHierarchy(1, catSetting);
+include::listings/CTEUsage.java[]
+----
+
+[graphviz, cat-hierarchy1, svg, role = 'cat-graph']
+----
+digraph g {
+    graph [color="#6a8759", bgcolor=transparent, fontcolor="#cc7832", rankdir=BT];
+    node [color="#6a8759", fontcolor="#cc7832"];
+    edge [color="#6a8759"];
+    Hillary;
+    Daisy;
+    George;
+    MOAC;
+    FOAC;
+
+    Willi -> MOAC
+    Willi -> FOAC
+    Susan -> MOAC
+    Susan -> FOAC
+    Trixy -> MOAC
+    Trixy -> FOAC
+    Michael -> Trixy
+    Michael -> Willi
+    George -> Susan
+    George -> Willi
+    Daisy -> Susan
+    Daisy -> Willi
+    "George Jr." -> Daisy
+    "George Jr." -> Michael
+    Hillary -> Daisy
+    Hillary -> George
+}
+----
+
+<<<
+
+[source,java, role = 'smallcode']
+----
+include::listings/CTE.java[]
+----
+
+Use like:
+
+[source, java, role = 'smallcode']
+----
+include::listings/CTEUsage.java[]
+----
+
+[graphviz, cat-hierarchy2, svg, role = 'cat-graph']
+----
+digraph g {
+    graph [color="#6a8759", bgcolor=transparent, fontcolor="#cc7832", rankdir=BT];
+    node [color="#6a8759", fontcolor="#cc7832"];
+    edge [color="#6a8759"];
+    Hillary [color=red];
+    Daisy;
+    George;
+    Susan;
+    Willi;
+    MOAC;
+    FOAC;
+
+    Willi -> MOAC
+    Willi -> FOAC
+    Susan -> MOAC
+    Susan -> FOAC
+    Trixy -> MOAC
+    Trixy -> FOAC
+    Michael -> Trixy
+    Michael -> Willi
+    George -> Susan
+    George -> Willi
+    Daisy -> Susan
+    Daisy -> Willi
+    "George Jr." -> Daisy
+    "George Jr." -> Michael
+    Hillary -> Daisy
+    Hillary -> George
+}
+----
+
+<<<
+
+[source,java, role = 'smallcode']
+----
+include::listings/CTE.java[]
+----
+
+Use like:
+
+[source, java, role = 'smallcode']
+----
+include::listings/CTEUsage.java[]
+----
+
+[graphviz, cat-hierarchy3, svg, role = 'cat-graph']
+----
+digraph g {
+    graph [color="#6a8759", bgcolor=transparent, fontcolor="#cc7832", rankdir=BT];
+    node [color="#6a8759", fontcolor="#cc7832"];
+    edge [color="#6a8759"];
+    Hillary [color=red];
+    Daisy [color=red];
+    George [color=red];
+    Susan;
+    Willi;
+    MOAC;
+    FOAC;
+
+    Willi -> MOAC
+    Willi -> FOAC
+    Susan -> MOAC
+    Susan -> FOAC
+    Trixy -> MOAC
+    Trixy -> FOAC
+    Michael -> Trixy
+    Michael -> Willi
+    George -> Susan
+    George -> Willi
+    Daisy -> Susan
+    Daisy -> Willi
+    "George Jr." -> Daisy
+    "George Jr." -> Michael
+    Hillary -> Daisy [color=red]
+    Hillary -> George [color=red]
+}
+----
+
+<<<
+
+[source,java, role = 'smallcode']
+----
+include::listings/CTE.java[]
+----
+
+Use like:
+
+[source, java, role = 'smallcode']
+----
+include::listings/CTEUsage.java[]
+----
+
+[graphviz, cat-hierarchy4, svg, role = 'cat-graph']
+----
+digraph g {
+    graph [color="#6a8759", bgcolor=transparent, fontcolor="#cc7832", rankdir=BT];
+    node [color="#6a8759", fontcolor="#cc7832"];
+    edge [color="#6a8759"];
+    Hillary [color=red];
+    Daisy [color=red];
+    George [color=red];
+    Susan [color=red];
+    Willi [color=red];
+    MOAC;
+    FOAC;
+
+    Willi -> MOAC
+    Willi -> FOAC
+    Susan -> MOAC
+    Susan -> FOAC
+    Trixy -> MOAC
+    Trixy -> FOAC
+    Michael -> Trixy
+    Michael -> Willi
+    George -> Susan [color=red]
+    George -> Willi [color=red]
+    Daisy -> Susan [color=red]
+    Daisy -> Willi [color=red]
+    "George Jr." -> Daisy
+    "George Jr." -> Michael
+    Hillary -> Daisy [color=red]
+    Hillary -> George [color=red]
+}
+----
+
+<<<
+
+[source,java, role = 'smallcode']
+----
+include::listings/CTE.java[]
+----
+
+Use like:
+
+[source, java, role = 'smallcode']
+----
+include::listings/CTEUsage.java[]
+----
+
+[graphviz, cat-hierarchy5, svg, role = 'cat-graph']
+----
+digraph g {
+    graph [color="#6a8759", bgcolor=transparent, fontcolor="#cc7832", rankdir=BT];
+    node [color="#6a8759", fontcolor="#cc7832"];
+    edge [color="#6a8759"];
+    Hillary [color=red];
+    Daisy [color=red];
+    George [color=red];
+    Susan [color=red];
+    Willi [color=red];
+    MOAC [color=red];
+    FOAC [color=red];
+
+    Willi -> MOAC [color=red]
+    Willi -> FOAC [color=red]
+    Susan -> MOAC [color=red]
+    Susan -> FOAC [color=red]
+    Trixy -> MOAC
+    Trixy -> FOAC
+    Michael -> Trixy
+    Michael -> Willi
+    George -> Susan [color=red]
+    George -> Willi [color=red]
+    Daisy -> Susan [color=red]
+    Daisy -> Willi [color=red]
+    "George Jr." -> Daisy
+    "George Jr." -> Michael
+    Hillary -> Daisy [color=red]
+    Hillary -> George [color=red]
+}
 ----
 
 [canvas-image="images/show_me_a_demo.jpg"]
