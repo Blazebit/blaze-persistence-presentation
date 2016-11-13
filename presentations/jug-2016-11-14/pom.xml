@@ -170,6 +170,7 @@
                                          <navigation>true</navigation>
                                          <goto>true</goto>
                                          <status>true</status>
+                                         <imagesoutdir>${project.slides.directory}/images</imagesoutdir>
                                     </attributes>
                                 </configuration>
                             </execution>
