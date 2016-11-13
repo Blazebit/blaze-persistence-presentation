@@ -1,4 +1,4 @@
-= Blaze-Persistence, Tomorrow's JPA, today
+= Blaze-Persistence, +++</h1><h2>Tomorrow's JPA, today</h2><h1>+++
 Christian Beikov, Moritz Becker
 :icons: font
 :split:

@@ -91,6 +91,19 @@ ul, ol {
   font-size: 4em !important;
 }
 
+#title-slide h2 {
+    position: absolute !important;
+    top: 60%;
+    left: initial !important;
+    right: initial !important;
+    width: auto !important;
+    left: 50% !important;
+    transform: translateX(-50%);
+    background-color: transparent !important;
+        padding: 0 !important;
+    margin: 0px !important;
+}
+
 #title-slide #author {
     font-size: 0.8em !important;
     position: relative !important;
@@ -102,7 +115,7 @@ ul, ol {
   float: left !important;
 }
 
-#_about_us img {
+#_about_us .openblock img {
     border-radius: 100px;
     margin-top: 33px;
     z-index: 10;
