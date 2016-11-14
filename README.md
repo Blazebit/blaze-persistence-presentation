@@ -2,6 +2,11 @@
 
 This repository collects presentations about blaze-persistence along with demos.
 
+## Building the presentation
+
+You have to install [GraphViz](http://www.graphviz.org/Download.php) and make it available in your PATH.
+Then go into the presentation you want to build and execute `mvn` or `mvn process-resources`. The resulting slides are generated in *target/generated-slides*
+
 ## Blaze-Persistence Demo
 
 The demo provides REST resources showcasing various blaze-persistence features.
