@@ -1,4 +1,4 @@
-= Blaze-Persistence, +++</h1><h2>Tomorrow's JPA, today</h2><h1>+++
+= Blaze-Persistence +++</h1><h2>Tomorrow's JPA, today</h2><h1>+++
 Christian Beikov, Moritz Becker
 :icons: font
 :split:
@@ -9,7 +9,7 @@ Christian Beikov, Moritz Becker
 
 == About us
 
-image::vendor.png[float="right"]
+image::vendor.png[role="vendor"]
 
 icon:twitter[] https://twitter.com/Blazebit[@Blazebit] +
 icon:github[] https://github.com/Blazebit
@@ -20,9 +20,8 @@ Blazebit Gesbr. is a working group doing commercial software and OSS under APL 2
 --
 image::christian_head.png[float="right"]
 
-{blank}
-
-* Christian Beikov, Blaze-Persistence lead
+* Christian Beikov
+* [job]#Blaze-Persistence lead#
 
 --
 
@@ -30,9 +29,8 @@ image::christian_head.png[float="right"]
 --
 image::moritz_head.png[float="right"]
 
-{blank}
-
-* Moritz Becker, Blaze-Persistence committer
+* Moritz Becker
+* [job]#Blaze-Persistence committer#
 
 --
 
@@ -40,16 +38,14 @@ image::moritz_head.png[float="right"]
 --
 image::bernd_head.png[float="right"]
 
-{blank}
-
-* Bernd Artm+++&uuml;+++ller, Designer
+* Bernd Artm+++&uuml;+++ller
+* [job]#Designer/Frontend#
 
 --
 
 == What is Blaze-Persistence
 
-// TODO: Need a new logo
-//image::logo.png[role="logo"]
+image::logo.png[role="logo"]
 
 * Library that builds on top of JPA with deep integration
 * Fluent builder API that is easy to use
@@ -228,10 +224,8 @@ Having some longstanding problems with the JPA provider that don't seem to get f
 `HHH-10241`:: Buggy MySQL code generation for null precedence
 --
 
-[%step]
+[%step,role="bottom"]
 --
-{blank}
-{blank}
 +++<p style="text-align: center; font-style: italic;">many more issues that are worked around automatically in Blaze-Persistence...</p>+++
 --
 
@@ -284,10 +278,8 @@ WHERE cat.name LIKE :catName
 +++<h3 style="text-align: center; font-size: 2em;">Blaze-Persistence got you covered!</h3>+++
 --
 
-[%step]
+[%step,role="bottom"]
 --
-{blank}
-{blank}
 +++<p style="text-align: center; font-style: italic;">Let's see how Blaze-Persistence helps you out with these problems!</p>+++
 --
 
@@ -343,7 +335,7 @@ public interface CatView {
     @MappingSubquery(KittensWithNamePatternSubqueryProvider.class)
     Integer getNumKittensWithNamePattern();
 
-    static class KittensWithNamePatternSubqueryProvider implements SubqueryProvider {
+    class KittensWithNamePatternSubqueryProvider implements SubqueryProvider {
         <T> T createSubquery(SubqueryInitiator<T> subqueryInitiator) {
             return subqueryBuilder.from(Cat.class)
                         .select("COUNT(*)")
@@ -697,8 +689,8 @@ public class BlazePersistenceProducer {
     }
 
     @Produces @ApplicationScoped
-    public EntityViewManager createEntityViewManager(CriteriaBuilderFactory criteriaBuilderFactory) {
-        return entityViewConfiguration.createEntityViewManager(criteriaBuilderFactory, emf);
+    public EntityViewManager createEntityViewManager(CriteriaBuilderFactory cbf) {
+        return entityViewConfiguration.createEntityViewManager(cbf, emf);
     }
 }
 ----
@@ -711,21 +703,21 @@ public class BlazePersistenceProducer {
 public class BlazePersistenceConfiguration {
 
     @PersistenceUnit
-    private EntityManagerFactory entityManagerFactory;
+    private EntityManagerFactory emf;
 
     @Bean @Lazy(false)
     @Scope(ConfigurableBeanFactory.SCOPE_SINGLETON)
     public CriteriaBuilderFactory createCriteriaBuilderFactory() {
         CriteriaBuilderConfiguration config = Criteria.getDefault();
         // do some configuration
-        return config.createCriteriaBuilderFactory(entityManagerFactory);
+        return config.createCriteriaBuilderFactory(emf);
     }
 
     @Bean @Lazy(false)
     @Scope(ConfigurableBeanFactory.SCOPE_SINGLETON)
     public EntityViewManager createEntityViewManager(CriteriaBuilderFactory cbf,
         EntityViewConfiguration entityViewConfiguration) {
-        return entityViewConfiguration.createEntityViewManager(cbf, entityManagerFactory);
+        return entityViewConfiguration.createEntityViewManager(cbf, emf);
     }
 }
 ----

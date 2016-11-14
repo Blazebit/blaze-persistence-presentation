@@ -2,6 +2,12 @@
 
 This repository collects presentations about blaze-persistence along with demos.
 
+## Export to PDF
+
+Download and install https://github.com/melix/deck2pdf
+
+Run `deck2pdf --width=1024 --height=768 target/generated-slides/jug-slides.html`
+
 ## Blaze-Persistence Demo
 
 The demo provides REST resources showcasing various blaze-persistence features.
