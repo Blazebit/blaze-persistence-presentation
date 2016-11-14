@@ -2,7 +2,6 @@
 Christian Beikov, Moritz Becker
 :icons: font
 :split:
-:navigation:
 :blank: pass:[ +]
 :markstart: pass:[<span class="mark">]
 :markend: pass:[</span>]
@@ -106,7 +105,7 @@ public class Cat {
 entityManager.find(Cat.class, catId);
 ----
 
-Leading to loading all relations...
+Leads to loading all relations...
 
 <<<
 
@@ -135,7 +134,7 @@ entityManager.close();
 c.getFather().getName();
 ----
 
-Leading to a `LazyInitializationExceptions` on invocation of `getName()`
+Leads to a `LazyInitializationExceptions` on invocation of `getName()`
 
 <<<
 
@@ -275,7 +274,7 @@ WHERE cat.name LIKE :catName
 [%step]
 --
 {blank}
-+++<h3 style="text-align: center; font-size: 2em;">Blaze-Persistence got you covered!</h3>+++
++++<h3 style="text-align: center; font-size: 2em;">Blaze-Persistence's got you covered!</h3>+++
 --
 
 [%step,role="bottom"]
