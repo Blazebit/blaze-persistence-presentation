@@ -89,10 +89,11 @@ public class CatSubResource {
                     .endOr()
                 .end()
                 .from(Cat.class, "cat")
-                .innerJoinOn(CatHierarchyCTE.class, "cte").on("cte.id").eqExpression("cat.id").end()
+                .from(CatHierarchyCTE.class, "cte")
+                .where("cte.id").eqExpression("cat.id")
                 .groupBy("cat.id")
                 .orderByAsc("cte.generation");
 
-        return evm.applySetting(setting, cb).getResultList();
+        return evm.applySetting(setting, cb, "cat").getResultList();
     }
 }

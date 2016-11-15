@@ -28,7 +28,7 @@ import com.blazebit.persistence.view.SubqueryProvider;
  * @since 1.2
  */
 @EntityView(Cat.class)
-public interface CatFamilyTreeView extends CatView{
+public interface CatFamilyTreeView extends CatView {
 
     CatView getMother();
 
@@ -44,8 +44,8 @@ public interface CatFamilyTreeView extends CatView{
             return subqueryInitiator.from(Cat.class)
                     .select("COUNT(*)")
                     .whereOr()
-                        .where("father.id").eqExpression("OUTER(id)")
-                        .where("mother.id").eqExpression("OUTER(id)")
+                        .where("father.id").eqExpression("VIEW_ROOT(id)")
+                        .where("mother.id").eqExpression("VIEW_ROOT(id)")
                     .endOr()
                     .end();
         }
