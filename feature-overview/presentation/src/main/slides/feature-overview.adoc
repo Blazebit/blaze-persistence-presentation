@@ -1,0 +1,1445 @@
+= Blaze-Persistence +++</h1><h2>Tomorrow's JPA, today</h2><h1>+++
+Christian Beikov, Moritz Becker
+:icons: font
+:split:
+:blank: pass:[ +]
+:markstart: pass:[<span class="mark">]
+:markend: pass:[</span>]
+
+== About us
+
+image::vendor.png[role="vendor"]
+
+icon:twitter[] https://twitter.com/Blazebit[@Blazebit] +
+icon:github[] https://github.com/Blazebit
+
+Blazebit Gesbr. is a working group doing commercial software and OSS under APL 2.0
+
+[%step]
+--
+image::christian_head.png[float="right"]
+
+* Christian Beikov
+* [job]#Blaze-Persistence lead#
+
+--
+
+[%step]
+--
+image::moritz_head.png[float="right"]
+
+* Moritz Becker
+* [job]#Blaze-Persistence committer#
+
+--
+
+[%step]
+--
+image::bernd_head.png[float="right"]
+
+* Bernd Artm+++&uuml;+++ller
+* [job]#Designer/Frontend#
+
+--
+
+== What is Blaze-Persistence
+
+image::logo.png[role="logo"]
+
+* Library that builds on top of JPA with deep integration
+* Fluent builder API that is easy to use
+* Rich pagination support integrated
+* Entity-Views as painless DTOs
+* Advanced SQL support on top of JPA model
+
+== Problems with ORM/JPA
+
+// List the problems that people have with ORMs and show the bad decisions that have to be made because of that.
+
+Think JPA 2.1 Entity-Graphs are too verbose?
+
+[source,java, role = 'mediumcode']
+----
+@Entity
+@NamedEntityGraph(
+    name = "Cat.catWithKittensParents",
+    attributeNodes = @NamedAttributeNode(value = "kittens", subgraph = "kittens"),
+    subgraphs = @NamedSubgraph(name = "kittens", attributeNodes = {
+        @NamedAttributeNode("father"), @NamedAttributeNode("mother")
+    })
+)
+public class Cat {
+    @Id @GeneratedValue
+    private Integer id;
+    private String name;
+    @OneToMany
+    private Set<Cat> kittens;
+    @ManyToOne(fetch = FetchType.LAZY)
+    private Cat mother;
+    @ManyToOne(fetch = FetchType.LAZY)
+    private Cat father;
+}
+----
+
+<<<
+
+Fetch-problems with loading the _"whole"_ database or `LazyInitializationExceptions`?
+
+[source,java,subs="verbatim,attributes"]
+----
+public class Cat {
+    @Id @GeneratedValue
+    private Integer id;
+    private String name;
+    @OneToMany(fetch = FetchType.EAGER)
+    private Set<Cat> kittens;
+    @ManyToOne(fetch = FetchType.EAGER)
+    private Cat mother;
+    @ManyToOne(fetch = FetchType.EAGER)
+    private Cat father;
+}
+----
+
+[source,java, role = 'mediumcode']
+----
+entityManager.find(Cat.class, catId);
+----
+
+Leads to loading all relations...
+
+<<<
+
+Fetch-problems with loading the _"whole"_ database or `LazyInitializationExceptions`?
+
+[source,java,subs="verbatim,attributes"]
+----
+public class Cat {
+    @Id @GeneratedValue
+    private Integer id;
+    private String name;
+    @OneToMany(fetch = FetchType.{markstart}LAZY{markend})
+    private Set<Cat> kittens;
+    @ManyToOne(fetch = FetchType.{markstart}LAZY{markend})
+    private Cat mother;
+    @ManyToOne(fetch = FetchType.{markstart}LAZY{markend})
+    private Cat father;
+}
+----
+
+[source,java, role = 'mediumcode']
+----
+Cat c = entityManager.find(Cat.class, catId);
+entityManager.close();
+c.getFather().getName();
+----
+
+Leads to a `LazyInitializationExceptions` on invocation of `getName()`
+
+<<<
+
+JPA constructor expressions for DTOs too inflexible?
+
+[source,sql]
+----
+SELECT new com.company.somepackage.dto.MyCatDTO(
+    c.name, kitten.name, father.name, mother.name
+) FROM Cat c
+LEFT JOIN FETCH c.kittens kitten
+LEFT JOIN FETCH kitten.father father
+LEFT JOIN FETCH kitten.mother mother
+----
+
+Results in flat objects, no hierarchies possible except you do something like that...
+
+[source,java, role = 'mediumcode']
+----
+entityManager.createQuery(query, MyCatDTO.class)
+    .getResultList()
+    .stream()
+    .collect(Collectors.groupingBy(MyCatDTO::getName, dto -> new MySubCatDTO(dto))
+    .entrySet()
+    .stream()
+    .map(entry -> new MyMainCatDTO(entry.getKey(), entry.getValue()))
+    .collect(Collectors.toList());
+----
+
+<<<
+
+Missing support for that one little SQL feature that you really need?
+
+[%step]
+--
+Set operations
+--
+
+[%step]
+--
+[source,sql]
+----
+SELECT c.name FROM Cat c
+UNION ALL
+SELECT p.name FROM Person p
+----
+--
+
+[%step]
+--
+Modification CTEs
+--
+
+[%step]
+--
+[source,sql]
+----
+WITH MyCte(id) AS(
+    UPDATE Cat c SET age = age + 1 RETURNING id
+)
+SELECT c.id FROM MyCte c
+----
+--
+
+<<<
+
+Having some longstanding problems with the JPA provider that don't seem to get fixed?
+
+[%step]
+--
+`HHH-9329`:: Left join semantics broken when using `ON` clause on collection table attribute
+--
+
+[%step]
+--
+`HHH-11042`:: Count distinct support for DBMS that don't natively support it
+--
+
+[%step]
+--
+`HHH-1615`:: Group by entity
+--
+
+[%step]
+--
+`HHH-10241`:: Buggy MySQL code generation for null precedence
+--
+
+[%step,role="bottom"]
+--
++++<p style="text-align: center; font-style: italic;">many more issues that are worked around automatically in Blaze-Persistence...</p>+++
+--
+
+<<<
+
+Feel like you can't reuse parts of queries and have to duplicate code?
+
+[%step]
+--
+[source,sql]
+----
+SELECT cat
+FROM Cat cat
+LEFT JOIN FETCH cat.kittens kitten
+WHERE cat.name LIKE :catName
+  AND cat.age > :catAge
+----
+--
+
+[%step]
+--
+which is very similar to...
+--
+
+[%step]
+--
+[source,sql]
+----
+SELECT cat
+FROM Cat cat
+LEFT JOIN FETCH cat.father
+LEFT JOIN FETCH cat.mother
+WHERE cat.name LIKE :catName
+  AND cat.age > :catAge
+----
+--
+
+<<<
+
+* Think JPA 2.1 Entity-Graphs are too verbose?
+* Fetch-problems with loading the _"whole"_ database or `LazyInitializationExceptions`?
+* JPA constructor expressions for DTOs too inflexible?
+* Missing support for that one little SQL feature that you really need?
+* Having some longstanding problems with the JPA provider that don't seem to get fixed?
+* Feel like you can't reuse parts of queries and have to duplicate code?
+
+[%step]
+--
+{blank}
++++<h3 style="text-align: center; font-size: 2em;">Blaze-Persistence's got you covered!</h3>+++
+--
+
+[%step,role="bottom"]
+--
++++<p style="text-align: center; font-style: italic;">Let's see how Blaze-Persistence helps you out with these problems!</p>+++
+--
+
+[canvas-image="images/features_are_coming.jpg"]
+== Blaze-Persistence features
+
+== Entity-views
+
+Entity-views are the ORM equivalent of database views.
+
+* You can use them to optimize entity fetching
+* Most of the time you do not need full entities
+* Querying only the parts you need reduces data transfer
+
+Some example use cases:
+
+* Display data in UI
+* Fetch data to be returned in REST resources
+* Partial updates in the works
+
+== Example View - Basic
+
+Entity views are projections of entities
+
+[cols="a,a"]
+|===
+|[source,java]
+----
+@Entity
+public class Cat {
+    @Id
+    Integer id;
+    String name;
+    Integer age;
+    @ManyToOne(fetch = FetchType.LAZY)
+    Cat mother;
+    @ManyToOne(fetch = FetchType.LAZY)
+    Cat father;
+    @ManyToOne(fetch = FetchType.LAZY)
+    Person owner;
+    @OneToMany
+    Set<Cat> kittens;
+}
+----
+
+|[source,java, role = 'mapping-right']
+----
+@EntityView(Cat.class)
+public interface CatView {
+
+    @IdMapping
+    Integer getId();
+
+    String getName();
+
+    @Mapping("LOWER(name)")
+    String getLowerCaseName();
+
+    @Mapping("SIZE(kittens)")
+    Integer getNumKittens();
+
+}
+----
+|===
+
+<<<
+
+Entity view mappings literally map to the following JPQL/HQL
+
+[cols="a,a"]
+|===
+|[source,java]
+----
+@EntityView(Cat.class)
+public interface CatView {
+
+    @IdMapping
+    Integer getId();
+
+    String getName();
+
+    @Mapping("LOWER(name)")
+    String getLowerCaseName();
+
+    @Mapping("SIZE(kittens)")
+    Integer getNumKittens();
+
+}
+----
+
+|[source,sql, role = 'mapping-right']
+----
+SELECT
+
+
+
+    c.id,
+
+    c.name,
+
+
+    LOWER(c.name),
+
+
+    SIZE(c.kittens)
+
+FROM Cat c
+----
+|===
+
+<<<
+
+Actually the `SIZE` function is optimized, so the JPQL/HQL looks more like this
+
+[cols="a,a"]
+|===
+|[source,sql]
+----
+SELECT
+    c.id,
+    c.name,
+    LOWER(c.name),
+    SIZE(c.kittens)
+
+
+FROM Cat c
+----
+
+|[source,sql, role = 'mapping-right']
+----
+SELECT
+    c.id,
+    c.name,
+    LOWER(c.name),
+    COUNT(*)
+FROM Cat c
+LEFT JOIN c.kittens kittens_1
+GROUP BY c.id, c.name, LOWER(c.name)
+----
+|===
+
+<<<
+
+Which roughly translates to the following SQL
+
+[cols="a,a"]
+|===
+|[source,sql]
+----
+SELECT
+    c.id,
+    c.name,
+    LOWER(c.name),
+    COUNT(*)
+FROM Cat c
+LEFT JOIN c.kittens kittens_1
+
+GROUP BY
+    c.id,
+    c.name,
+    LOWER(c.name)
+----
+
+|[source,sql, role = 'mapping-right']
+----
+SELECT
+    c.id,
+    c.name,
+    LOWER(c.name),
+    COUNT(*)
+FROM cat c
+LEFT JOIN cat_kitten kittens_1
+       ON kittens_1.cat_id = c.id
+GROUP BY
+    c.id,
+    c.name,
+    LOWER(c.name)
+----
+|===
+
+== Example View - Subquery support
+
+[cols="49a,51a"]
+|===
+|[source,java, role = 'mapping-left']
+----
+@EntityView(Cat.class)
+public interface CatView {
+
+    @IdMapping
+    Integer getId();
+
+    @MappingSubquery(MyProvider.class)
+    Integer getNumKittens();
+}
+----
+
+|[source,sql]
+----
+SELECT
+    c.id,
+    (
+        SELECT COUNT(*)
+        FROM Cat sub
+        WHERE sub.parent.id = c.id
+          AND sub.name LIKE :kittenNamePattern
+    )
+FROM Cat c
+----
+|===
+
+[source,java,role='mediumcode']
+----
+public class MyProvider implements SubqueryProvider {
+    public <T> T createSubquery(SubqueryInitiator<T> subqueryInitiator) {
+        return subqueryBuilder.from(Cat.class, "sub")
+                    .select("COUNT(*)")
+                    .where("sub.parent.id").eqExpression("OUTER(id)")
+                    .where("sub.name").like().expression(":kittenNamePattern")
+                    .end();
+    }
+}
+----
+
+== Example View - Subview
+
+Arbitrary depth of subviews possible. Cycles are disallowed
+
+[cols="a,a"]
+|===
+|[source,java, role = 'mapping-left']
+----
+@EntityView(Cat.class)
+public interface CatView {
+
+    @IdMapping
+    Integer getId();
+
+    PersonView getOwner();
+    @EntityView(Person.class)
+    interface PersonView {
+
+        @IdMapping
+        Integer getId();
+
+        String getName();
+    }
+}
+----
+
+|[source,sql]
+----
+SELECT
+
+
+
+    c.id,
+
+
+
+
+
+
+    owner_1.id,
+
+    owner_1.name
+FROM Cat c
+LEFT JOIN c.owner owner_1
+----
+|===
+
+== Entity view mappings
+
+Support for many more kinds of mappings
+
+* Collections
+** Support for basic types and subviews
+** Remapping of collection types i.e. `Set` in entity as `List`
+* Correlations
+** Multiple mapping strategies for ad-hoc relations
+* Inheritance
+** Elegant mapping of JPA inheritance
+** Custom selector based inheritance possible
+
+Also support for filtering and sorting based on attributes!
+
+== Pagination
+
+Blaze-Persistence supports two types of pagination:
+
+* Offset pagination
+* Keyset pagination
+
+Keyset pagination is preferable to offset pagination since it allows consistent pagination of data while elements are inserted.
+
+Pagination can also be combined with entity-views!
+
+== Offset pagination example
+
+Let's take a simple example first
+
+[source,java]
+----
+List<Cat> allCats = cbf.create(em, Cat.class)
+                .fetch("kittens")
+                .orderByAsc("id")
+                .getResultList();
+----
+
+[source,sql]
+----
+SELECT c
+FROM Cat c
+LEFT JOIN FETCH c.kittens
+ORDER BY c.id
+----
+
+This will materialize all objects in memory which is inefficient
+
+<<<
+
+But even if `setFirstResult()` and `setMaxResults()` are used,
+JPA implementations tend to load all data when *collection fetches* are involved.
+
+[source,java]
+----
+TypedQuery<Cat> query = cbf.create(em, Cat.class)
+                .fetch("kittens")
+                .orderByAsc("id")
+                .getTypedQuery();
+query.setFirstResult(0);
+query.setMaxResults(10);
+List<Cat> page1 = query.getResultList();
+----
+
+This will *still* materialize all objects in memory and emit a _warning_ by Hibernate
+
+[source,sql]
+----
+SELECT c
+FROM Cat c
+LEFT JOIN FETCH c.kittens
+ORDER BY c.id
+----
+
+<<<
+
+The offset based pagination API of Blaze-Persistence is here to help
+
+[source,java]
+----
+PagedList<Cat> page1 = cbf.create(em, Cat.class)
+                .fetch("kittens")
+                .orderByAsc("id")
+                .page(0, 10)
+                .getResultList();
+----
+
+The use of `page()` will switch to the `PaginatedCriteriaBuilder` which can do better
+
+* `PagedList` subtype gives access to overall count and page configuration
+* Query is split into _id-query_ and _object-query_ only if necessary
+
+<<<
+
+The _count-query_ strips all `SELECT`, `ORDER BY` and unnecessary joins
+
+[source,sql]
+----
+SELECT COUNT(*)
+FROM Cat c
+----
+
+[cols="a,a"]
+|===
+|
+The _id-query_ strips unnecessary `SELECT` items and joins
+
+[source,sql, role = 'mapping-left']
+----
+SELECT c.id
+FROM Cat c
+ORDER BY c.id
+-- LIMIT 10
+-- OFFSET 0
+----
+
+|
+The _object-query_ strips the `WHERE` clause and unnecessary joins
+
+[source,sql, role = 'mapping-right']
+----
+SELECT c
+FROM Cat c
+LEFT JOIN FETCH c.kittens
+WHERE c.id IN :idList
+ORDER BY c.id
+----
+|===
+
+<<<
+
+Fetching only singular relations can be optimized which is properly done
+
+[source,java]
+----
+PagedList<Cat> page1 = cbf.create(em, Cat.class)
+                .fetch("mother")
+                .orderByAsc("id")
+                .page(0, 10)
+                .getResultList();
+----
+
+[source,sql]
+----
+SELECT c
+FROM Cat c
+LEFT JOIN FETCH c.mother
+ORDER BY c.id
+-- LIMIT 10
+-- OFFSET 0
+----
+
+== Keyset pagination example
+
+To use keyset pagination you have to enable keyset extraction first
+
+[source,java]
+----
+PagedList<Cat> page1 = cbf.create(em, Cat.class)
+                .orderByAsc("id")
+                .page(0, 10)
+                .withKeysetExtraction(true)
+                .getResultList();
+KeysetPage keysetPage = page1.getKeysetPage();
+----
+
+Providing the `KeysetPage` to subsequent pagination queries can improve performance
+
+[source,java]
+----
+PagedList<Cat> page2 = cbf.create(em, Cat.class)
+                .orderByAsc("id")
+                .page(keysetPage, 10, 10)
+                .withKeysetExtraction(true)
+                .getResultList();
+----
+
+<<<
+
+Since only the `id` is a too simple keyset we will look at another example
+
+[source,java]
+----
+PagedList<Cat> page1 = cbf.create(em, Cat.class)
+                .orderByAsc("name")
+                .orderByAsc("id")
+                .page(0, 10)
+                .withKeysetExtraction(true)
+                .getResultList();
+KeysetPage keysetPage = page1.getKeysetPage();
+----
+
+The query behind the scenes is adapted to include select items for the keyset
+
+[source,sql]
+----
+SELECT c.name, c.id, c
+FROM Cat c
+ORDER BY c.name, c.id
+-- LIMIT 10
+-- OFFSET 0
+----
+
+<<<
+
+When requesting the next page, the keyset page can serve as bound instead of offset
+
+[source,java]
+----
+PagedList<Cat> page2 = cbf.create(em, Cat.class)
+                .orderByAsc("name")
+                .orderByAsc("id")
+                .page(keysetPage, 10, 10)
+                .withKeysetExtraction(true)
+                .getResultList();
+KeysetPage keysetPage = page2.getKeysetPage();
+----
+
+Instead of using offset to skip elements, this uses the `WHERE` clause
+
+[source,sql]
+----
+SELECT c.name, c.id, c
+FROM Cat c
+WHERE c.name > :_name OR c.name = :_name AND c.id > :_id
+ORDER BY c.name, c.id
+-- LIMIT 10
+----
+
+<<<
+
+To explain how this works, imagine a simpler data set like the alphabet
+
+[ditaa, nolightbox="true"]
+....
++---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+
+| a | b | c | d | e | f | g | h | i | j | k | l | m | n | o | p | q | r | s | t | u | v | w | x | y | z |
++---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+
+....
+
+If we split it up into pages of the size of 5 elements we get 6 pages and the last one only containing 1 element
+
+[ditaa, nolightbox="true"]
+....
+       +-----+ +-----+ +-----+ +-----+ +-----+ +-----+
+       |     | |     | |     | |     | |     | |     |
+       |  a  | |  f  | |  k  | |  p  | |  u  | |  z  |
+       |     | |     | |     | |     | |     | |     |
+       +-----+ +-----+ +-----+ +-----+ +-----+ +-----+
+       |     | |     | |     | |     | |     |
+       |  b  | |  g  | |  l  | |  q  | |  v  |
+       |     | |     | |     | |     | |     |
+       +-----+ +-----+ +-----+ +-----+ +-----+
+       |     | |     | |     | |     | |     |
+       |  c  | |  h  | |  m  | |  r  | |  w  |
+       |     | |     | |     | |     | |     |
+       +-----+ +-----+ +-----+ +-----+ +-----+
+       |     | |     | |     | |     | |     |
+       |  d  | |  i  | |  n  | |  s  | |  x  |
+       |     | |     | |     | |     | |     |
+       +-----+ +-----+ +-----+ +-----+ +-----+
+       |     | |     | |     | |     | |     |
+       |  e  | |  j  | |  o  | |  t  | |  y  |
+       |     | |     | |     | |     | |     |
+       +-----+ +-----+ +-----+ +-----+ +-----+
+Page      1       2       3       4       5       6
+....
+
+<<<
+
+Keyset pagination makes use of the keyset of page 1 as _lower bound_ for page 2.
+Every value greater than `e` obviously is on higher pages.
+
+[ditaa, nolightbox="true"]
+....
+       +-----+ +-----+ +-----+ +-----+ +-----+ +-----+
+       |cYEL | |cDDD | |cDDD | |cDDD | |cDDD | |cDDD |
+       |  a  | |  f  | |  k  | |  p  | |  u  | |  z  |
+       |     | |     | |     | |     | |     | |     |
+       +-----+ +-----+ +-----+ +-----+ +-----+ +-----+
+       |cYEL | |cDDD | |cDDD | |cDDD | |cDDD |
+       |  b  | |  g  | |  l  | |  q  | |  v  |
+       |     | |     | |     | |     | |     |
+       +-----+ +-----+ +-----+ +-----+ +-----+
+       |cYEL | |cDDD | |cDDD | |cDDD | |cDDD |
+       |  c  | |  h  | |  m  | |  r  | |  w  |
+       |     | |     | |     | |     | |     |
+       +-----+ +-----+ +-----+ +-----+ +-----+
+       |cYEL | |cDDD | |cDDD | |cDDD | |cDDD |
+       |  d  | |  i  | |  n  | |  s  | |  x  |
+       |     | |     | |     | |     | |     |
+       +-----+ +-----+ +-----+ +-----+ +-----+
+       |cGRE | |cDDD | |cDDD | |cDDD | |cDDD |
+       |  e  | |  j  | |  o  | |  t  | |  y  |
+       |     | |     | |     | |     | |     |
+       +-----+ +-----+ +-----+ +-----+ +-----+
+Page      1       2       3       4       5       6
+....
+
+<<<
+
+To select the page 2 we query for entries greater than `e`
+
+[source,sql]
+----
+SELECT a.value
+FROM Alphabet a
+WHERE a.value > 'e'
+ORDER BY a.value
+-- LIMIT 5
+----
+
+[ditaa, nolightbox="true"]
+....
+       +-----+ +-----+ +-----+ +-----+ +-----+ +-----+
+       |cDDD | |cYEL | |cDDD | |cDDD | |cDDD | |cDDD |
+       |  a  | |  f  | |  k  | |  p  | |  u  | |  z  |
+       |     | |     | |     | |     | |     | |     |
+       +-----+ +-----+ +-----+ +-----+ +-----+ +-----+
+       |cDDD | |cYEL | |cDDD | |cDDD | |cDDD |
+       |  b  | |  g  | |  l  | |  q  | |  v  |
+       |     | |     | |     | |     | |     |
+       +-----+ +-----+ +-----+ +-----+ +-----+
+       |cDDD | |cYEL | |cDDD | |cDDD | |cDDD |
+       |  c  | |  h  | |  m  | |  r  | |  w  |
+       |     | |     | |     | |     | |     |
+       +-----+ +-----+ +-----+ +-----+ +-----+
+       |cDDD | |cYEL | |cDDD | |cDDD | |cDDD |
+       |  d  | |  i  | |  n  | |  s  | |  x  |
+       |     | |     | |     | |     | |     |
+       +-----+ +-----+ +-----+ +-----+ +-----+
+       |cGRE | |cYEL | |cDDD | |cDDD | |cDDD |
+       |  e  | |  j  | |  o  | |  t  | |  y  |
+       |     | |     | |     | |     | |     |
+       +-----+ +-----+ +-----+ +-----+ +-----+
+Page      1       2       3       4       5       6
+....
+
+<<<
+
+When traversing to the previous page i.e. from 3 to 2 it gets a bit complicated
+
+[ditaa, nolightbox="true"]
+....
+       +-----+ +-----+ +-----+ +-----+ +-----+ +-----+
+       |cDDD | |cDDD | |cGRE | |cDDD | |cDDD | |cDDD |
+       |  a  | |  f  | |  k  | |  p  | |  u  | |  z  |
+       |     | |     | |     | |     | |     | |     |
+       +-----+ +-----+ +-----+ +-----+ +-----+ +-----+
+       |cDDD | |cDDD | |cYEL | |cDDD | |cDDD |
+       |  b  | |  g  | |  l  | |  q  | |  v  |
+       |     | |     | |     | |     | |     |
+       +-----+ +-----+ +-----+ +-----+ +-----+
+       |cDDD | |cDDD | |cYEL | |cDDD | |cDDD |
+       |  c  | |  h  | |  m  | |  r  | |  w  |
+       |     | |     | |     | |     | |     |
+       +-----+ +-----+ +-----+ +-----+ +-----+
+       |cDDD | |cDDD | |cYEL | |cDDD | |cDDD |
+       |  d  | |  i  | |  n  | |  s  | |  x  |
+       |     | |     | |     | |     | |     |
+       +-----+ +-----+ +-----+ +-----+ +-----+
+       |cDDD | |cDDD | |cYEL | |cDDD | |cDDD |
+       |  e  | |  j  | |  o  | |  t  | |  y  |
+       |     | |     | |     | |     | |     |
+       +-----+ +-----+ +-----+ +-----+ +-----+
+Page      1       2       3       4       5       6
+....
+
+To select the page 2 when having 3 we query for entries lower than `k`
+
+<<<
+
+One might think a simple _lower_ check is enough
+
+[source,sql,subs="verbatim,attributes"]
+----
+SELECT a.value
+FROM Alphabet a
+WHERE a.value < 'k'
+ORDER BY a.value ASC
+-- LIMIT 5
+----
+
+[%step]
+--
+But that will give you the first page
+
+[ditaa, nolightbox="true"]
+....
+       +-----+ +-----+ +-----+ +-----+ +-----+ +-----+
+       |cYEL | |cDDD | |cDDD | |cDDD | |cDDD | |cDDD |
+       |  a  | |  f  | |  k  | |  p  | |  u  | |  z  |
+       |     | |     | |     | |     | |     | |     |
+       +-----+ +-----+ +-----+ +-----+ +-----+ +-----+
+       |cYEL | |cDDD | |cDDD | |cDDD | |cDDD |
+       |  b  | |  g  | |  l  | |  q  | |  v  |
+       |     | |     | |     | |     | |     |
+       +-----+ +-----+ +-----+ +-----+ +-----+
+       |cYEL | |cDDD | |cDDD | |cDDD | |cDDD |
+       |  c  | |  h  | |  m  | |  r  | |  w  |
+       |     | |     | |     | |     | |     |
+       +-----+ +-----+ +-----+ +-----+ +-----+
+       |cYEL | |cDDD | |cDDD | |cDDD | |cDDD |
+       |  d  | |  i  | |  n  | |  s  | |  x  |
+       |     | |     | |     | |     | |     |
+       +-----+ +-----+ +-----+ +-----+ +-----+
+       |cYEL | |cDDD | |cDDD | |cDDD | |cDDD |
+       |  e  | |  j  | |  o  | |  t  | |  y  |
+       |     | |     | |     | |     | |     |
+       +-----+ +-----+ +-----+ +-----+ +-----+
+Page      1       2       3       4       5       6
+....
+--
+
+<<<
+
+The ordering has to be inverted to get the previous page.
+
+[source,sql,subs="verbatim,attributes"]
+----
+SELECT a.value
+FROM Alphabet a
+WHERE a.value < 'k'
+ORDER BY a.value {markstart}DESC{markend}
+-- LIMIT 5
+----
+
+When _NULL PRECEDENCE_ is involved, the operator has to be inverted too.
+
+[ditaa, nolightbox="true"]
+....
+       +-----+ +-----+ +-----+ +-----+ +-----+ +-----+
+       |cDDD | |cYEL | |cDDD | |cDDD | |cDDD | |cDDD |
+       |  a  | |  f  | |  k  | |  p  | |  u  | |  z  |
+       |     | |     | |     | |     | |     | |     |
+       +-----+ +-----+ +-----+ +-----+ +-----+ +-----+
+       |cDDD | |cYEL | |cDDD | |cDDD | |cDDD |
+       |  b  | |  g  | |  l  | |  q  | |  v  |
+       |     | |     | |     | |     | |     |
+       +-----+ +-----+ +-----+ +-----+ +-----+
+       |cDDD | |cYEL | |cDDD | |cDDD | |cDDD |
+       |  c  | |  h  | |  m  | |  r  | |  w  |
+       |     | |     | |     | |     | |     |
+       +-----+ +-----+ +-----+ +-----+ +-----+
+       |cDDD | |cYEL | |cDDD | |cDDD | |cDDD |
+       |  d  | |  i  | |  n  | |  s  | |  x  |
+       |     | |     | |     | |     | |     |
+       +-----+ +-----+ +-----+ +-----+ +-----+
+       |cDDD | |cYEL | |cDDD | |cDDD | |cDDD |
+       |  e  | |  j  | |  o  | |  t  | |  y  |
+       |     | |     | |     | |     | |     |
+       +-----+ +-----+ +-----+ +-----+ +-----+
+Page      1       2       3       4       5       6
+....
+
+<<<
+
+There are still some missing pieces
+
+* When inverting the ordering in the query, elements have to be reversed again in memory
+* Having multiple keyset elements requires use of row value comparison
+* Emulating row value comparison with proper null handling requires some effort
+* Nullability analysis can be used to prevent unnecessary null handling code
+* Uniqueness analysis is required to detect possible indeterminism
+
+All of that is handled transparently for you when using the `PaginatedCriteriaBuilder` API
+
+== Common Table Expressions
+
+Common Table Expressions (CTEs) are disposable tables created in memory only for the current statement.
+
+Use cases:
+
+* Refactoring of subqueries for better readability
+* Recursive querying
+
+CTEs can also be combined with pagination and entity-views!
+
+== CTE example
+
+First we need a _entity_ that represent the structure of the CTE
+
+[source,java]
+----
+@CTE #<1>
+@Entity
+public class CatHierarchyCTE {
+
+    private Integer id;
+    private Integer motherId;
+    private Integer fatherId;
+    private Integer generation;
+
+    // Getters and setters
+}
+----
+<1> Annotation from Blaze-Persistence core to make entity read-only
+
+{blank}
+
+[%step]
+Don't forget to register entity in persistence unit
+
+<<<
+
+Query building code almost looks like logical representation
+
+[cols="a,a"]
+|===
+|[source,java, role = 'smallcode-left']
+----
+cb.withRecursive(CatHierarchyCTE.class)
+    .from(Cat.class)
+    .bind("id").select("id")
+    .bind("motherId").select("mother.id")
+    .bind("fatherId").select("father.id")
+    .bind("generation").select("0")
+
+    .where("id").eqExpression(catId.toString())
+.unionAll()
+    .from(Cat.class, "cat")
+    .from(CatHierarchyCTE.class, "cte")
+    .bind("id").select("cat.id")
+    .bind("motherId").select("cat.mother.id")
+    .bind("fatherId").select("cat.father.id")
+    .bind("generation").select("cte.generation + 1")
+    .whereOr()
+        .where("cat.id").eqExpression("cte.motherId")
+        .where("cat.id").eqExpression("cte.fatherId")
+    .endOr()
+.end()
+.from(Cat.class, "cat")
+.innerJoinOn(CatHierarchyCTE.class, "cte")
+    .on("cte.id").eqExpression("cat.id")
+.end()
+.orderByAsc("cte.generation");
+----
+
+|[source,sql, role = 'smallcode-right']
+----
+WITH RECURSIVE CatHierarchyCTE(id, motherId, fatherId, generation) AS (
+    SELECT
+        cat.id,
+        cat.mother.id,
+        cat.father.id,
+        0
+    FROM Cat cat
+    WHERE cat.id = 1
+UNION ALL
+    SELECT
+
+        cat.id,
+        cat.mother.id,
+        cat.father.id,
+        cte.generation + 1
+    FROM Cat cat, CatHierarchyCTE cte
+    WHERE cat.id = cte.motherId
+       OR cat.id = cte.fatherId
+)
+
+SELECT cat
+FROM Cat cat, CatHierarchyCTE cte
+WHERE cte.id = cat.id
+
+ORDER BY cte.generation
+----
+|===
+
+<<<
+
+Traverse example graph of cats with ancestors
+
+[source,java, role = 'smallcode']
+----
+include::listings/CTE.java[]
+----
+
+[graphviz, cat-hierarchy1, svg, role = 'cat-graph']
+----
+digraph g {
+    graph [color="#6a8759", bgcolor=transparent, fontcolor="#cc7832", rankdir=BT];
+    node [color="#6a8759", fontcolor="#cc7832"];
+    edge [color="#6a8759"];
+    Hillary;
+    Daisy;
+    George;
+    MOAC;
+    FOAC;
+
+    Willi -> MOAC
+    Willi -> FOAC
+    Susan -> MOAC
+    Susan -> FOAC
+    Trixy -> MOAC
+    Trixy -> FOAC
+    Michael -> Trixy
+    Michael -> Willi
+    George -> Susan
+    George -> Willi
+    Daisy -> Susan
+    Daisy -> Willi
+    "George Jr." -> Daisy
+    "George Jr." -> Michael
+    Hillary -> Daisy
+    Hillary -> George
+}
+----
+
+<<<
+
+[source,java, role = 'smallcode']
+----
+include::listings/CTE.java[]
+----
+
+Use like:
+
+[source, java, role = 'smallcode']
+----
+include::listings/CTEUsage.java[]
+----
+
+[graphviz, cat-hierarchy2, svg, role = 'cat-graph']
+----
+digraph g {
+    graph [color="#6a8759", bgcolor=transparent, fontcolor="#cc7832", rankdir=BT];
+    node [color="#6a8759", fontcolor="#cc7832"];
+    edge [color="#6a8759"];
+    Hillary [color=red];
+    Daisy;
+    George;
+    Susan;
+    Willi;
+    MOAC;
+    FOAC;
+
+    Willi -> MOAC
+    Willi -> FOAC
+    Susan -> MOAC
+    Susan -> FOAC
+    Trixy -> MOAC
+    Trixy -> FOAC
+    Michael -> Trixy
+    Michael -> Willi
+    George -> Susan
+    George -> Willi
+    Daisy -> Susan
+    Daisy -> Willi
+    "George Jr." -> Daisy
+    "George Jr." -> Michael
+    Hillary -> Daisy
+    Hillary -> George
+}
+----
+
+<<<
+
+[source,java, role = 'smallcode']
+----
+include::listings/CTE.java[]
+----
+
+Use like:
+
+[source, java, role = 'smallcode']
+----
+include::listings/CTEUsage.java[]
+----
+
+[graphviz, cat-hierarchy3, svg, role = 'cat-graph']
+----
+digraph g {
+    graph [color="#6a8759", bgcolor=transparent, fontcolor="#cc7832", rankdir=BT];
+    node [color="#6a8759", fontcolor="#cc7832"];
+    edge [color="#6a8759"];
+    Hillary [color=red];
+    Daisy [color=red];
+    George [color=red];
+    Susan;
+    Willi;
+    MOAC;
+    FOAC;
+
+    Willi -> MOAC
+    Willi -> FOAC
+    Susan -> MOAC
+    Susan -> FOAC
+    Trixy -> MOAC
+    Trixy -> FOAC
+    Michael -> Trixy
+    Michael -> Willi
+    George -> Susan
+    George -> Willi
+    Daisy -> Susan
+    Daisy -> Willi
+    "George Jr." -> Daisy
+    "George Jr." -> Michael
+    Hillary -> Daisy [color=red]
+    Hillary -> George [color=red]
+}
+----
+
+<<<
+
+[source,java, role = 'smallcode']
+----
+include::listings/CTE.java[]
+----
+
+Use like:
+
+[source, java, role = 'smallcode']
+----
+include::listings/CTEUsage.java[]
+----
+
+[graphviz, cat-hierarchy4, svg, role = 'cat-graph']
+----
+digraph g {
+    graph [color="#6a8759", bgcolor=transparent, fontcolor="#cc7832", rankdir=BT];
+    node [color="#6a8759", fontcolor="#cc7832"];
+    edge [color="#6a8759"];
+    Hillary [color=red];
+    Daisy [color=red];
+    George [color=red];
+    Susan [color=red];
+    Willi [color=red];
+    MOAC;
+    FOAC;
+
+    Willi -> MOAC
+    Willi -> FOAC
+    Susan -> MOAC
+    Susan -> FOAC
+    Trixy -> MOAC
+    Trixy -> FOAC
+    Michael -> Trixy
+    Michael -> Willi
+    George -> Susan [color=red]
+    George -> Willi [color=red]
+    Daisy -> Susan [color=red]
+    Daisy -> Willi [color=red]
+    "George Jr." -> Daisy
+    "George Jr." -> Michael
+    Hillary -> Daisy [color=red]
+    Hillary -> George [color=red]
+}
+----
+
+<<<
+
+[source,java, role = 'smallcode']
+----
+include::listings/CTE.java[]
+----
+
+Use like:
+
+[source, java, role = 'smallcode']
+----
+include::listings/CTEUsage.java[]
+----
+
+[graphviz, cat-hierarchy5, svg, role = 'cat-graph']
+----
+digraph g {
+    graph [color="#6a8759", bgcolor=transparent, fontcolor="#cc7832", rankdir=BT];
+    node [color="#6a8759", fontcolor="#cc7832"];
+    edge [color="#6a8759"];
+    Hillary [color=red];
+    Daisy [color=red];
+    George [color=red];
+    Susan [color=red];
+    Willi [color=red];
+    MOAC [color=red];
+    FOAC [color=red];
+
+    Willi -> MOAC [color=red]
+    Willi -> FOAC [color=red]
+    Susan -> MOAC [color=red]
+    Susan -> FOAC [color=red]
+    Trixy -> MOAC
+    Trixy -> FOAC
+    Michael -> Trixy
+    Michael -> Willi
+    George -> Susan [color=red]
+    George -> Willi [color=red]
+    Daisy -> Susan [color=red]
+    Daisy -> Willi [color=red]
+    "George Jr." -> Daisy
+    "George Jr." -> Michael
+    Hillary -> Daisy [color=red]
+    Hillary -> George [color=red]
+}
+----
+
+[canvas-image="images/show_me_a_demo.jpg"]
+== Demo
+
+== Integrations
+
+Hibernate is the only JPA provider that has deep integration right now:
+
+* Fixes/workarounds for known Hibernate bugs + limitations
+* Support for advanced SQL features like CTEs
+
+We provide integrations for CDI and Spring allowing the auto-discovery of entity views.
+
+== Getting started with CDI
+
+[source, java, role = 'mediumcode']
+----
+@ApplicationScoped
+public class BlazePersistenceProducer {
+
+    @Inject
+    private EntityManagerFactory emf;
+
+    @Inject
+    private EntityViewConfiguration entityViewConfiguration;
+
+    @Produces @ApplicationScoped
+    public CriteriaBuilderFactory createCriteriaBuilderFactory() {
+        CriteriaBuilderConfiguration config = Criteria.getDefault();
+        return config.createCriteriaBuilderFactory(emf);
+    }
+
+    @Produces @ApplicationScoped
+    public EntityViewManager createEntityViewManager(CriteriaBuilderFactory cbf) {
+        return entityViewConfiguration.createEntityViewManager(cbf, emf);
+    }
+}
+----
+
+== Getting started with Spring
+
+[source, java, role = 'mediumcode']
+----
+@Configuration
+public class BlazePersistenceConfiguration {
+
+    @PersistenceUnit
+    private EntityManagerFactory emf;
+
+    @Bean @Lazy(false)
+    @Scope(ConfigurableBeanFactory.SCOPE_SINGLETON)
+    public CriteriaBuilderFactory createCriteriaBuilderFactory() {
+        CriteriaBuilderConfiguration config = Criteria.getDefault();
+        // do some configuration
+        return config.createCriteriaBuilderFactory(emf);
+    }
+
+    @Bean @Lazy(false)
+    @Scope(ConfigurableBeanFactory.SCOPE_SINGLETON)
+    public EntityViewManager createEntityViewManager(CriteriaBuilderFactory cbf,
+        EntityViewConfiguration entityViewConfiguration) {
+        return entityViewConfiguration.createEntityViewManager(cbf, emf);
+    }
+}
+----
+
+== Roadmap
+
+// List new features that are about to come
+
+* Updateable entity views
+* Table function support e.g. `generate_series()`
+* `MERGE`/`UPSERT` statement
+* Geospatial types and operations
+* Range/Interval types and operations
+* Lateral joins
+* Custom static metamodel
+* https://github.com/debezium[Debezium] integration to update secondary index servers via entity views
+
+[canvas-image="images/give_up_on_jpa.jpg"]
+== Don't give up on JPA
+
+== Community & Support
+
+https://blazebit.herokuapp.com[Slack]::
+We have notifications enabled, so just ask questions :)
+
+https://github.com/Blazebit/blaze-persistence/issues[GitHub issues]::
+If you've found a bug or question, just create an issue
+
+https://stackoverflow.com/questions/tagged/blaze-persistence[Stackoverflow]::
+Don't hesitate to ask questions there too, we are listening
+
+https://persistence.blazebit.com/support.html[Commercial support & training]::
+We help you to get the most out of Blaze-Persistence
+
+== Q & A
+
++++<h1 style="text-align: center;">Got questions?</h1>+++
