@@ -85,13 +85,18 @@ public class CatsResource {
         if (firstKey == null || lastKey == null || lastPageOffset == null || lastPageSize == null) {
             catSetting = EntityViewSetting.create(CatView.class, (page - 1) * pageSize, pageSize);
         } else {
-            KeysetPage keysetPage = new KeysetPageImpl(page, pageSize, new KeysetImpl(new Serializable[]{ firstKey }), new KeysetImpl(new Serializable[]{ lastKey }));
+            KeysetPage keysetPage = new KeysetPageImpl(lastPageOffset, lastPageSize, new KeysetImpl(new Serializable[]{ firstKey }), new KeysetImpl(new Serializable[]{ lastKey }));
             catSetting = EntityViewSetting.create(CatView.class, (page - 1) * pageSize, pageSize).withKeysetPage(keysetPage);
         }
 
-        PagedList<CatView> result = evm.applySetting(catSetting, cb)
-                .withKeysetExtraction(true)
-                .getResultList();
+        PaginatedCriteriaBuilder<CatView> pcb = evm.applySetting(catSetting, cb)
+                .withKeysetExtraction(true);
+
+        String countQueryString = pcb.getPageCountQueryString();
+        String idQueryString = pcb.getPageIdQueryString();
+        String objectQueryString = pcb.getQueryString();
+
+        PagedList<CatView> result = pcb.getResultList();
 
         return PaginatedResult.from(result, uriInfo, keyset -> keyset.getTuple()[0].toString());
     }
