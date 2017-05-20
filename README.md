@@ -11,7 +11,7 @@ Then go into the presentation you want to build and execute `mvn` or `mvn proces
 
 Download and install https://github.com/melix/deck2pdf
 
-Run `deck2pdf --width=1900 --height=1000 target/generated-slides/jug-slides.html`
+Run `deck2pdf --width=1900 --height=1000 feature-overview/presentation/target/generated-slides/feature-overview.html`
 
 Careful, do not mouse-over the webview otherwise you will get the arrows in the resulting PDF.
 

@@ -15,7 +15,7 @@
 
     <modules>
         <module>presentation</module>
-        <module>web-demo</module>
+        <module>demo</module>
     </modules>
 
 </project>
