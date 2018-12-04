@@ -1,0 +1,1363 @@
+= Entity Views +++</h1><h2>Not your father's DTOs</h2><h1>+++
+Christian Beikov
+:icons: font
+:split:
+:blank: pass:[ +]
+:markstart: pass:[<span class="mark">]
+:markend: pass:[</span>]
+
+== About us
+
+image::vendor.png[role="vendor"]
+
+icon:twitter[] https://twitter.com/Blazebit[@Blazebit] +
+icon:github[] https://github.com/Blazebit
+
+Blazebit Gesbr. is a working group doing commercial software and OSS under APL 2.0
+
+[%step,role="half-left"]
+--
+image::christian_head.png[float="right"]
+
+* Christian Beikov
+* [company]#Curecomp#
+* [job]#Blaze-Persistence lead#
+
+--
+
+[%step,role="half-left"]
+--
+image::moritz_head.png[float="right"]
+
+* Moritz Becker
+* [company]#Ordami#
+* [job]#Blaze-Persistence committer#
+
+--
+
+[%step,role="half-left"]
+--
+image::bernd_head.png[float="right"]
+
+* Bernd Artm+++&uuml;+++ller
+* [company]#Zoomsquare#
+* [job]#Designer/Frontend#
+
+--
+
+[%step,role="half-left"]
+--
+image::jw_head.jpg[float="right"]
+
+* Jan-Willem Gmeilig Meyling
+* [company]#Pallas Athena Group#
+* [job]#Community member#
+--
+
+[%step,role="half-left"]
+--
+image::heruan_head.jpg[float="right"]
+
+* Giovanni Lovato
+* [company]#Axians Italia, Vicenza#
+* [job]#Community member#
+--
+
+== What's a DTO again?
+
+[, Wikipedia]
+""
+A data transfer object (DTO) is an object that carries data between processes.
+""
+
+* Reduce roundtrips and amount of data
+* Simple objects without business logic
+* No behavior, except for retrieval, serialization etc.
+
+== What's wrong with DTOs with JPA?
+
+* Some people say explicit DTOs are boilerplate and unnecessary
+
+[cols="a,a"]
+|===
+|[source,java]
+----
+@Entity
+public class Cat {
+    @Id
+    Integer id;
+    String name;
+    Integer age;
+    @ManyToOne(fetch = FetchType.LAZY)
+    Cat mother;
+    @ManyToOne(fetch = FetchType.LAZY)
+    Cat father;
+    @ManyToOne(fetch = FetchType.LAZY)
+    Person owner;
+    @OneToMany
+    Set<Cat> kittens;
+}
+----
+
+|[source,java, role = 'mapping-right']
+----
+public class CatDto {
+    Integer id;
+    String name;
+    String ownerName;
+
+    public CatDto(
+            Integer id,
+            String name,
+            String ownerName) {
+        this.id = id;
+        this.name = name;
+        this.ownerName = ownerName;
+    }
+    // Getters + Setters? + equals/hashCode?
+}
+----
+|===
+
+<<<
+
+* Querying efficiently requires a special query
+
+[source,sql]
+----
+SELECT NEW com.mycompany.CatDto(c.id, c.name, o.name)
+FROM Cat c
+LEFT JOIN c.owner o
+----
+
+[%step]
+* These traditional implementations come with lots of boilerplate
+* Note that this forces presentation logic into the business logic
+* And what about collections in DTOs?
+
+<<<
+
+* Want to wire up a collection in a DTO manually?
+
+[source,sql]
+----
+SELECT c.id, c.name, kitten.id, kitten.name
+FROM Cat c
+LEFT JOIN c.kittens kitten
+----
+
+[source,java]
+----
+entityManager.createQuery(query, Tuple.class)
+    .getResultList()
+    .stream()
+    .collect(Collectors.groupingBy(CatTempDto::fromTuple, CatSubDto::fromTuple)
+    .entrySet()
+    .stream()
+    .map(entry -> new CatDto(entry.getKey(), entry.getValue()))
+    .collect(Collectors.toList());
+----
+
+<<<
+
+* If you don't care about performance that much, fetch the entity and use a Java mapper
+** Dozer - Reflection based bean mapping
+** Orika - Bean mapping with runtime bytecode spinning
+** MapStruct - Bean mapping with compile time code generation
+* MapStruct is great for simple Java-to-Java model mappings
+* Though none of these tools help with adapting the query to fetch only necessary data
+
+<<<
+
+* All in all, doing the right thing usually requires a lot of code
+* Modelling the write concern with explicit DTOs has similar issues
+* Solutions usually rely on Lazy-Loading or Over-fetching data
+* Because of this, people tend to avoid using explicit DTOs altogether
+* When performance is negligible, just annotate entity model with e.g. `@JsonIgnore` etc.
+
+[%step]
+* Or maybe just use the right tool for the job?
+
+[canvas-image="images/right-tool-for-job.jpg"]
+== Blaze-Persistence features
+
+== What are Entity Views
+
+image::dto-mapping.png[role="logo"]
+
+Entity Views are the ORM equivalent of database views
+
+* Built on top of Blaze-Persistence Core
+* Define how DTO maps to entity via JPQL.next expressions
+* Querying only the parts you need reduces data transfer
+* Flushing only the parts that may change helps as well
+
+Some example use cases:
+
+* Display data in UI
+* Fetch data to be returned in REST resources
+* Define updatable attributes per use case
+
+== What is Blaze-Persistence
+
+image::logo.png[role="logo"]
+
+* Library that builds on top of JPA with deep integration
+* Fluent builder API that is easy to use
+* Rich pagination support integrated
+* Advanced SQL support on top of JPA model
+** SET operations (`UNION`, `INTERSECT`, etc.)
+** CTEs and recursive CTEs (`WITH` clause)
+** `RETURNING` clause support
+** `VALUES` clause and much more!
+
+<<<
+
+image::logo.png[role="logo"]
+image::dto-mapping.png[role="logo clear-right"]
+
+* Library that builds on top of JPA with deep integration
+* Fluent builder API that is easy to use
+* Rich pagination support integrated
+* Advanced SQL support on top of JPA model
+** SET operations (`UNION`, `INTERSECT`, etc.)
+** CTEs and recursive CTEs (`WITH` clause)
+** `RETURNING` clause support
+** `VALUES` clause and much more!
+* *Entity Views* as painless DTOs
+
+== Example View - Basic
+
+Entity views are projections of entities
+
+[cols="a,a"]
+|===
+|[source,java,role="basic-mapping-1-1"]
+----
+@Entity
+public class Cat {
+    @Id
+    Integer id;
+    String name;
+    Integer age;
+    @ManyToOne(fetch = FetchType.LAZY)
+    Cat mother;
+    @ManyToOne(fetch = FetchType.LAZY)
+    Cat father;
+    @ManyToOne(fetch = FetchType.LAZY)
+    Person owner;
+    @OneToMany
+    Set<Cat> kittens;
+}
+----
+
+|[source,java, role = 'mapping-right basic-mapping-1-2']
+----
+@EntityView(Cat.class)
+public interface CatView {
+
+    @IdMapping
+    Integer getId();
+
+    String getName();
+
+    @Mapping("LOWER(name)")
+    String getLowerCaseName();
+
+    @Mapping("SIZE(kittens)")
+    Integer getNumKittens();
+
+}
+----
+|===
+
+++++
+<canvas id="basic-mapping-1" width="1920" height="1080" style="position: absolute; top: 0; left: 0; width: 1920px; height: 1080px"></canvas>
+<script type="text/javascript">
+(function(id){
+mapElementToElement(id, "id", "getId");
+mapElementToElement(id, "name", "getName");
+mapElementToElement(id, "name", "getLowerCaseName");
+mapElementToElement(id, "kittens", "getNumKittens");
+})("basic-mapping-1");
+</script>
+++++
+
+<<<
+
+Entity view mappings literally map to the following JPQL/HQL
+
+[cols="a,a"]
+|===
+|[source,java,role = "basic-mapping-2-1"]
+----
+@EntityView(Cat.class)
+public interface CatView {
+
+    @IdMapping
+    Integer getId();
+
+    String getName();
+
+    @Mapping("LOWER(name)")
+    String getLowerCaseName();
+
+    @Mapping("SIZE(kittens)")
+    Integer getNumKittens();
+
+}
+----
+
+|[source,sql, role = 'mapping-right basic-mapping-2-2']
+----
+SELECT
+
+
+
+    c.id,
+
+    c.name,
+
+
+    LOWER(c.name),
+
+
+    SIZE(c.kittens)
+
+FROM Cat c
+----
+|===
+
+++++
+<canvas id="basic-mapping-2" width="1920" height="1080" style="position: absolute; top: 0; left: 0; width: 1920px; height: 1080px"></canvas>
+<script type="text/javascript">
+(function(id){
+mapElementToElement(id, "getId", "id");
+mapElementToElement(id, "getName", "name");
+mapElementToElement(id, "getLowerCaseName", "LOWER");
+mapElementToElement(id, "getNumKittens", "kittens");
+})("basic-mapping-2");
+</script>
+++++
+
+<<<
+
+Actually the `SIZE` function is optimized, so the JPQL/HQL looks more like this
+
+[cols="a,a"]
+|===
+|[source,sql, role = "basic-mapping-3-1"]
+----
+SELECT
+    c.id,
+    c.name,
+    LOWER(c.name),
+    SIZE(c.kittens)
+
+
+FROM Cat c
+----
+
+|[source,sql, role = 'mapping-right basic-mapping-3-2']
+----
+SELECT
+    c.id,
+    c.name,
+    LOWER(c.name),
+    COUNT(*)
+FROM Cat c
+LEFT JOIN c.kittens kittens_1
+GROUP BY c.id, c.name, LOWER(c.name)
+----
+|===
+
+++++
+<canvas id="basic-mapping-3" width="1920" height="1080" style="position: absolute; top: 0; left: 0; width: 1920px; height: 1080px"></canvas>
+<script type="text/javascript">
+(function(id){
+mapElementToElement(id, "id", "id");
+mapElementToElement(id, "name", "name");
+mapElementToElement(id, "LOWER", "LOWER");
+mapElementToElement(id, "kittens", "COUNT");
+})("basic-mapping-3");
+</script>
+++++
+
+<<<
+
+Which roughly translates to the following SQL
+
+[cols="a,a"]
+|===
+|[source,sql, role = "basic-mapping-4-1"]
+----
+SELECT
+    c.id,
+    c.name,
+    LOWER(c.name),
+    COUNT(*)
+FROM Cat c
+LEFT JOIN c.kittens kittens_1
+
+GROUP BY
+    c.id,
+    c.name,
+    LOWER(c.name)
+----
+
+|[source,sql, role = 'mapping-right basic-mapping-4-2']
+----
+SELECT
+    c.id,
+    c.name,
+    LOWER(c.name),
+    COUNT(*)
+FROM cat c
+LEFT JOIN cat_kitten kittens_1
+       ON kittens_1.cat_id = c.id
+GROUP BY
+    c.id,
+    c.name,
+    LOWER(c.name)
+----
+|===
+
+++++
+<canvas id="basic-mapping-4" width="1920" height="1080" style="position: absolute; top: 0; left: 0; width: 1920px; height: 1080px"></canvas>
+<script type="text/javascript">
+(function(id){
+mapElementToElement(id, "id", "id");
+mapElementToElement(id, "name", "name");
+mapElementToElement(id, "LOWER", "LOWER");
+mapElementToElement(id, "COUNT", "COUNT");
+})("basic-mapping-4");
+</script>
+++++
+
+== Example View - Subquery support
+
+[cols="49a,51a"]
+|===
+|[source,java, role = 'mapping-left']
+----
+@EntityView(Cat.class)
+public interface CatView {
+
+    @IdMapping
+    Integer getId();
+
+    @MappingSubquery(MyProvider.class)
+    Integer getNumKittens();
+}
+----
+
+|[source,sql]
+----
+SELECT
+    c.id,
+    (
+        SELECT COUNT(*)
+        FROM Cat sub
+        WHERE sub.parent.id = c.id
+          AND sub.name LIKE :kittenNamePattern
+    )
+FROM Cat c
+----
+|===
+
+[source,java,role='mediumcode']
+----
+public class MyProvider implements SubqueryProvider {
+    public <T> T createSubquery(SubqueryInitiator<T> subqueryInitiator) {
+        return subqueryBuilder.from(Cat.class, "sub")
+                    .select("COUNT(*)")
+                    .where("sub.parent.id").eqExpression("OUTER(id)")
+                    .where("sub.name").like().expression(":kittenNamePattern")
+                    .end();
+    }
+}
+----
+
+== Example View - Subview
+
+Arbitrary depth of subviews possible. Cycles are disallowed
+
+[cols="a,a"]
+|===
+|[source,java, role = 'mapping-left']
+----
+@EntityView(Cat.class)
+public interface CatView {
+
+    @IdMapping
+    Integer getId();
+
+    PersonView getOwner();
+    @EntityView(Person.class)
+    interface PersonView {
+
+        @IdMapping
+        Integer getId();
+
+        String getName();
+    }
+}
+----
+
+|[source,sql]
+----
+SELECT
+
+
+
+    c.id,
+
+
+
+
+
+
+    owner_1.id,
+
+    owner_1.name
+FROM Cat c
+LEFT JOIN c.owner owner_1
+----
+|===
+
+== Example View - Collection
+
+Collections just work. Entity views handle the details
+
+[cols="a,a"]
+|===
+|[source,java, role = 'mapping-left mapping-collection-1-1']
+----
+@EntityView(Cat.class)
+public interface CatView {
+
+    @IdMapping
+    Integer getId();
+
+    Set<KittenView> getKittens();
+    @EntityView(Cat.class)
+    interface KittenView {
+
+        @IdMapping
+        Integer getId();
+
+        String getName();
+    }
+}
+----
+
+|[source,sql, role = "mapping-collection-1-2"]
+----
+SELECT
+
+
+
+    c.id,
+
+
+
+
+
+
+    kittens_1.id,
+
+    kittens_1.name
+FROM Cat c
+LEFT JOIN c.kittens kittens_1
+----
+|===
+
+== Entity view mappings
+
+Support for many more kinds of mappings
+
+* Collections
+** Remapping of collection types i.e. `Set` in entity as `List`
+* Correlations
+** Multiple mapping strategies for ad-hoc relations
+* Inheritance
+** Elegant mapping of JPA inheritance
+** Custom selector based inheritance possible
+* Use aggregations and let Blaze-Persistence figure out the `GROUP BY` for you
+* Also support for filtering and sorting based on attributes!
+
+== Entity view concepts
+
+* Built around the idea of separating projections from the base query
+* Allows to implement a base query without the knowledge of the projection
+* Projection can be applied to any query node of a base query with proper type
+* Allows for re-use of entity views, as well as base queries
+* First define desired structure, then provide the mapping via JPQL.next expression
+* Weaving the projection into a query requires a flexible query builder
+* Blaze-Persistence Core resolves arbitrary depth path expressions `cat.kittens.owner.favoriteCat`
+
+[canvas-image="images/arent-there-alternatives.jpg"]
+== Aren't there alternatives
+
+== Entity view alternatives
+
+* Hibernate proprietary `@Immutable` entity with use of `@Formula`
+** Has it's limits and is SQL based rather than JPQL/HQL based
+** Requires copying mappings which is painful for collections
+** No syntax validation in mappings on startup
+** Hibernate fetch strategies only work with `entityManager.find` or `Hibernate.initialize`
+* Roll your own JPQL + mapper
+** Requires a lot of effort to get right for all cases
+* Spring Data Projections
+** Only good for simple cases, doesn't support complex mapping
+
+== Entity view advantages
+
+* Use JPQL.next expressions for projections instead of SQL
+* Mappings are validated against JPA-model on startup
+* No more lazy loading or accidental N + 1 queries issues
+* Performance problems can be handled by adapting attribute fetch strategies
+** Strategies: `JOIN` (default), batched `SELECT` or `SUBSELECT`
+** Fetch strategies like Hibernate, but work with any base query, not just by id
+* Domain specific abstraction over persistence model
+* First class filter and sorting support for entity views
+* Combine with advanced features provided by Blaze-Persistence Core(CTEs, etc.)
+
+[canvas-image="images/speechless.jpg"]
+== Speechless?
+
+[canvas-image="images/demo-time.jpg"]
+== Angular demo
+
+// Show example with Angular and keyset pagination? => Filter and sorter on attributes via EntityViewSettingProcessor
+
+== Entity views for reporting
+
+* Are your reporting queries complex and is writing the `GROUP BY` clause a pain?
+* Entity views can help, thanks to _implicit group by generation_
+
+[source,java]
+----
+@EntityView(Cat.class)
+interface CatReportView {
+
+    Long getId();
+    String getName();
+    @Mapping("AVG(kittens.age)")
+    double getAvgKittenAge();
+}
+----
+
+[source,java]
+----
+entityViewManager.find(entityManager, CatReportView.class, catId)
+----
+
+<<<
+
+* _Implicit group by generation_ is provided by Blaze-Persistence Core
+* So the base query does not need to know about the grouping
+
+[cols="a,a"]
+|===
+|[source,java, role = 'mapping-left mapping-aggregate-1-1']
+----
+@EntityView(Cat.class)
+interface CatReportView {
+
+    Long getId();
+    String getName();
+    @Mapping("AVG(kittens.age)")
+    double getAvgKittenAge();
+
+
+
+}
+----
+
+|[source,sql, role = "mapping-aggregate-1-2"]
+----
+SELECT
+
+
+    c.id,
+    c.name,
+
+    AVG(kittens_1.age)
+
+FROM Cat c
+LEFT JOIN c.kittens kittens_1
+GROUP BY c.id, c.name
+----
+|===
+
+== Upcoming GraphQL integration
+
+* Recently read that everyone loves GraphQL and wants to use it
+* Entity views are perfect match for GraphQL types
+
+[cols="a,a"]
+|===
+|[source,java, role = 'mapping-left mapping-aggregate-2-1']
+----
+@EntityView(Cat.class)
+interface CatReportView {
+    Long getId();
+    String getName();
+    @Mapping("AVG(kittens.age)")
+    double getAvgKittenAge();
+}
+----
+
+|[source,json, role = "mapping-aggregate-2-2"]
+----
+type Query { catViews: [CatView] }
+type CatView {
+  id: ID
+  name: String
+
+  avgKittenAge: Float
+}
+----
+|===
+
+* Just an idea for now, but seems easily doable
+
+[canvas-image="images/do-i-have-to-rewrite-code.jpg"]
+== Should I rewrite my JPA Criteria code
+
+== Keep your existing JPA Criteria code
+
+* No need to throw away all your existing code
+* Blaze-Persistence comes with a JPA Criteria API implementation
+* Has a few extensions like e.g. entity joins
+* Will add new extensions as the need arises
+* Produces a Blaze-Persistence Core query builder
+* Harness advanced features even for legacy queries
+* Stick with JPA Criteria API if you like it
+
+<<<
+
+* Use an entity view on top of a JPA Criteria query
+
+[source,java]
+----
+// Create criteria query object with BlazeCriteria
+BlazeCriteriaQuery<Cat> query = BlazeCriteria.get(criteriaBuilderFactory, Cat.class);
+BlazeCriteriaBuilder cb = query.getCriteriaBuilder();
+
+// Business as usual, just your important business logic
+Root<Cat> cat = query.from(Cat.class);
+query.where(cb.gt(cat.get(Cat_.age), 18));
+
+// Create the Core query builder and apply the entity view to it
+CriteriaBuilder<Cat> coreBuilder = query.createCriteriaBuilder(entityManager);
+List<CatView> result = entityViewManager.applySetting(
+  coreBuilder,
+  EntityViewSetting.create(CatView.class)
+).getResultList();
+----
+
+== What about the write concern
+
+* So far, only presented how the read part works i.e. how to get data out
+* But DTOs are also useful or sometimes necessary for getting data in
+* Entity model often not suitable to hold partial data
+* An entity type might allow setting fields that shouldn't be set in a use case
+* Using entity model for read concern isn't good because of problems with lazy loading
+* Using entity model for write concern is bad because one might set fields that aren't considered
+* Mere possibility of doing something that isn't intended is problematic
+
+<<<
+
+* Ever accidently set an attribute that was `updatable = false`?
+
+[source,java]
+----
+@Entity
+class SomeEntity {
+    private Tenant tenant;
+    @ManyToOne
+    @JoinColumn(updatable = false)
+    public Tenant getTenant() { return tenant; }
+    public void setTenant(Tenant tenant) { this.tenant = tenant; }
+}
+----
+
+<<<
+
+* Or worse, accidently set an attribute that should have been `updatable = false`?
+
+[source,java]
+----
+@Entity
+class SomeEntity {
+    private Tenant tenant;
+    @ManyToOne
+    public Tenant getTenant() { return tenant; }
+    public void setTenant(Tenant tenant) { this.tenant = tenant; }
+}
+----
+
+<<<
+
+* Switching to field injection can get you far
+
+[source,java]
+----
+@Entity
+class SomeEntity {
+    @ManyToOne
+    private Tenant tenant;
+    public Tenant getTenant() { return tenant; }
+}
+----
+
+<<<
+
+* But comes with a price..
+
+[source,java]
+----
+SomeEntity e = ...
+e.getTenant().getId();
+----
+
+[%step]
+[source,bash]
+----
+org.hibernate.LazyInitializationException: could not initialize proxy - no Session
+----
+
+<<<
+
+* Using plain JPA for the domain model or DTO model works out pretty well
+* Encapsulate everything by using field access and protect data
+* But there are limitations that you have to know
+** Id access of proxy instance initializes object
+** No guarantee that models match when having multiple domain models
+** Dirty tracking just started working properly in recent Hibernate versions
+** Even with dirty tracking, `merge` first loads from DB before flushing updates
+** Optimizations for immutable entities are Hibernate proprietary
+** Filtering on unmapped columns has to be done with Hibernate filters
+
+[canvas-image="images/enter-updatable-entity-views.jpg"]
+== Enter updatable entity views
+
+== Updatable entity views
+
+* Like normal entity views, but can flush changes back
+* Extensive startup validation will inform you about mistakes early
+* Encourages clean domain driven design with proper encapsulation
+* Updatable entity views require a shift in thinking
+* Update operations always start at the aggregate root
+* When modelling a use case, start with aggregate root
+* Usually, there is only a single aggregate root per transaction
+
+== Why updatable entity views
+
+* Write model DTOs per use-case allows easier understanding and efficient read/update
+* Optimistic and pessimistic locking support for write model DTOs
+* Handles all the fancy stuff like collections, subviews etc.
+* Automatic inverse relationship management
+* Supports custom cascade deletes and also orphan removal
+* Implements the most efficient remove by id support with proper cascading
+* Amazing Spring Data and pretty good DeltaSpike Data integration
+
+<<<
+
+* Thanks to dirty tracking, allows API for inspecting actual changes
+* Handles primary key based equality properly
+* Good performance because of dirty tracking
+** Can do direct updates without loading data first with query strategy
+** Can do efficient fine-grained locking
+** Can pre-load the exact entity graph that is needed for an update
+** Preserving of "logical collection operations" to avoid expensive "CollectionRecreateEvent"
+** Implements index translation optimization to improve indexed list performance
+
+== Updatable entity views - Basic
+
+[source,java]
+----
+@EntityView(Cat.class)
+@UpdatableEntityView
+public interface CatUpdateView {
+
+    @IdMapping
+    Integer getId();
+
+    String getName();
+    void setName(String name);
+}
+----
+
+* Simply invoke `EntityViewManager.update()` on updatable entity view
+
+[source,java]
+----
+CatUpdateView cat = ...
+cat.setName("newName");
+
+entityViewManager.update(entityManager, cat);
+----
+
+== Updatable entity views
+
+* Flush modes as required by your use case
+** Lazy - Flush updatable if one owned attribute is dirty
+** Partial - Only flush what actually changed
+** Full - Always flush all updatable attributes
+* Query flush strategy is default that avoids loading data
+* Entity flush strategy loads dirty part of graph for updates
+* Using `entityManager.merge` is roughly equivalent to lazy entity flushing
+* Lazy query flushing is the most efficient and also the default
+* Also, if nothing is dirty, nothing happens on `EntityViewManager.update()`
+
+== Updatable entity views - Subview & Collection
+
+[source,java]
+----
+@EntityView(Cat.class)
+@UpdatableEntityView
+public interface CatUpdateView {
+
+    @IdMapping
+    Integer getId();
+
+    @UpdatableMapping
+    Set<CatIdView> getKittens();
+}
+----
+
+* Adding existing cat to kittens will only do an insert into the join table
+
+[source,java]
+----
+CatUpdateView cat = ...
+cat.getKittens().add(entityViewManager.getReference(CatIdView.class, catId));
+----
+
+== Creatable entity views
+
+* We distinguish between creatable and updatable entity views
+* Creation often requires setting additional attributes
+
+[source,java]
+----
+@EntityView(Cat.class)
+@CreatableEntityView
+public interface CatCreateView {
+
+    @IdMapping
+    Integer getId();
+
+    PersonIdView getOwner();
+    void setOwner(PersonIdView owner);
+}
+----
+
+* Changing owner later is a dedicated use case that deserves its own entity view
+
+<<<
+
+* Creating new instances of creatable entity view via
+
+[source,java]
+----
+CatCreateView cat = entityViewManager.create(CatCreateView.class);
+----
+
+* Invokes `@PostCreate` method defined in creatable entity view
+
+[source,java]
+----
+@EntityView(Cat.class)
+@CreatableEntityView
+public interface CatCreateView {
+    @PostCreate default void init() {
+        // set default values
+    }
+}
+----
+
+<<<
+
+* Startup validation ensures a creatable entity view is _persistable_ based on non-null attributes
+* Flushing creatable entity views always happens via `EntityManager.persist()`
+* Currently, attributes that should only be settable in a service have to be mapped
+* Pre-persist entity view listeners is about to come to Blaze-Persistence 1.4 to handle that
+
+[source,java]
+----
+CatCreateView cat = ...
+entityViewManager.updateWith(entityManager, cat)
+    .onPrePersist(CatCreateView.class, Cat.class, (evm, em, v, entity) -> {
+        entity.setOwner(loggedInOwner);
+    })
+    .flush();
+----
+
+* On flush, sets generated identifiers on the entity view
+
+== Updatable entity views - Spring Data
+
+* Using updatable or creatable entity views with Spring Data is easy
+
+[source,java]
+----
+@UpdatableEntityView
+@EntityView(Cat.class)
+interface CatModificationView {
+    @IdMapping
+    Integer getId();
+}
+
+@CreatableEntityView
+@EntityView(Cat.class)
+interface CatCreateView extends CatModificationView {
+    //...
+}
+
+interface CatRepository extends Repository<Cat, Integer> {
+    CatModificationView save(CatModificationView cat);
+}
+----
+
+== Updatable entity views - ChangeModel API
+
+* Ever wanted to present a user what actually changed or generate audit info?
+* The ChangeModel API is here to help you access the dirty state
+
+[source,java]
+----
+CatUpdateView cat = ...
+cat.setName("newName");
+SingularChangeModel<CatUpdateView> c = entityViewManager.getChangeModel(cat);
+c.isDirty(); // true
+c.get("name").isDirty(); // true
+c.get("name").getInitialState(); // the old value
+c.get("name").getCurrentState(); // "newName"
+----
+
+[canvas-image="images/i-dont-always-improve-performance.jpg"]
+== Improve your performance
+
+== Who uses Blaze-Persistence
+
+image::axians.png[width=700]
+
+image::curecomp.png[width=700]
+
+image::ordami.png[width=600]
+
+image::athena-studies.png[width=400]
+
+== Axians Vicenza, Italy
+
+image::axians.png[width=300, role="logo"]
+
+* Giovanni Lovato recently entered a project based on Spring/JPA
+* Web application for IT-service management
+* Big entity model with many complex relations and repositories
+* The need for DTOs arose which was implemented with `@SqlResultSetMapping`
+* Quickly became overwhelming as entities were full of mappings
+
+[source,java,role="smallcode"]
+----
+@SqlResultSetMapping(
+    name="CustomerDetailsResult",
+    classes = {
+        @ConstructorResult(
+            targetClass=com.acme.CustomerDetails.class,
+            columns = {
+                @ColumnResult(name="id"),
+                @ColumnResult(name="name"),
+                @ColumnResult(name="orderCount"),
+                @ColumnResult(name="avgOrder", type=Double.class)
+            }
+        )
+    }
+)
+----
+
+<<<
+
+Spring Data Projections didn't work for them since it's limited to entity attributes
+
+[source,java]
+----
+interface CustomerDetails {
+
+    Long getId();
+
+    String getName();
+
+    // can't map orderCount nor avgOrder!
+
+}
+----
+
+<<<
+
+* Lack of JPA standard support for CTE eventually lead search to Blaze-Persistence
+* Switching domain model to Entity Views was a game changer for the project
+
+[, Giovanni Lovato]
+""
+Adopting Entity Views helped me overcome all the compromises I had to accept before and
+speed-up the performance of my repositories in a way I never imagined!
+""
+
+<<<
+
+Cumbersome mapping and querying was replaced with a simple Entity View
+
+[source,java]
+----
+@EntityView(Customer.class)
+interface CustomerDetails {
+
+    Long getId();
+
+    String getName();
+
+    @Mapping("COUNT(orders)")
+    long getOrderCount();
+
+    @Mapping("AVG(orders.amount)")
+    double getAvgOrder();
+
+}
+----
+
+<<<
+
+With the Spring Data integration, consuming this is as simple as
+
+[source,java]
+----
+interface CustomerRepository extends JpaRepository<Customer, Long> {
+
+    CustomerDetails findByName(String name);
+
+}
+----
+
+<<<
+
+Simple stuff looks simple, but what about the complex CTE queries?
+
+[cols="a,a"]
+|===
+|[source,java,role="smallcode"]
+----
+@EntityView(Customer.class)
+interface CustomerTickets {
+
+  @MappingCorrelatedSimple(
+    correlated = TicketCountCte.class,
+    correlationBasis = "this",
+    correlationExpression = "customerId = EMBEDDING_VIEW(id)",
+    fetch = FetchStrategy.JOIN)
+  TicketAggregateView getTicketAggregates();
+
+  @EntityView(TicketCountCte.class)
+  interface TicketAggregateView {
+
+    String getCustomerId();
+
+    @Mapping("COALESCE(totalTicketCount, 0L)")
+    long getTotalTicketCount();
+
+    @Mapping("COALESCE(openTicketCount, 0L)")
+    long getOpenTicketCount();
+  }
+
+  @MappingSubquery(CteRegistrationSubqueryProvider.class)
+  Integer getUnused();
+
+}
+----
+
+|[source,java,role="smallcode"]
+----
+@CTE
+@Entity
+class TicketCountCte {
+
+  @Id
+  String customerId;
+  long totalTicketCount;
+  long openTicketCount;
+}
+
+class CteRegistrationSubqueryProvider implements SubqueryProvider {
+
+  @Override
+  public <T> T createSubquery(SubqueryInitiator<T> subqueryInitiator) {
+    return subqueryInitiator.fromValues(Integer.class, "t", Arrays.asList(1))
+      .with(TicketCountCte.class)
+        .from(Ticket.class, "t")
+        .bind("customerId").select("t.customer.id")
+        .bind("totalTicketCount").select("COUNT(*)")
+        .bind("openTicketCount").select("count(CASE WHEN t.open = true THEN 1 END)")
+      .end()
+    .end().select("1");
+  }
+
+}
+----
+|===
+
+<<<
+
+[, Giovanni Lovato]
+""
+And this is just the start, Blaze-Persistence is maintained daily with bug fixes
+and new features, with a rich roadmap and exhaustive documentation. I really
+look forward to the next releases and upcoming features, to continue to improve
+my code and my domain model.
+""
+
+
+== Curecomp Linz, Austria
+
+image::curecomp.png[width=300, role = "logo"]
+
+* Clevercure SRM is completely built on top of Blaze-Persistence
+* Domain models are entity views that completely encapsulate the JPA model
+* Using all the fancy advanced features to improve performance
+* Started out as simple utility to be able to provide fetches externally
+* Filter, sorting and pagination requirements lead to develop Blaze-Persistence Core
+* Deficiencies of JPQL constructor expression lead to developing entity views
+* Ever since extended Blaze-Persistence to handle new requirements efficiently
+* Developer productivity increased significantly and designs are more domain driven
+
+<<<
+
+The kind of mappings the creators of Blaze-Persistence actually do
+
+[source,java,role="smallcode"]
+----
+@EntityView(Document.class)
+interface DocumentTableReportRowView extends LocalizableView, IdHolderView<Integer> {
+    @Mapping("CONCAT(partner.party.name, ' (', partner.erpCode, ')')")
+    String getPartner();
+    @Mapping("COALESCE(documentType.localized[:language].name, documentType.localized[documentType.defaultLanguage].name)")
+    String getDocumentTypeName();
+    UserNameView getOwnerUser();
+    @Mapping("currentVersion.creationDate")
+    Instant getVersionCreationDate();
+    @Mapping("currentVersion.contractDate")
+    Instant getContractDate();
+    @Mapping("currentVersion.lastCancelDate")
+    Instant getLastCancelDate();
+    @Mapping("currentVersion.validFromDate")
+    Instant getValidFromDate();
+    @Mapping("currentVersion.validToDate")
+    Instant getValidToDate();
+    Boolean isEnabled();
+    @Mapping("currentVersion.archivationStatus")
+    ArchivationStatus getArchivationStatus();
+    @Mapping("currentVersion.cancelled")
+    Boolean isCancelled();
+    @Mapping("SIZE(versions)")
+    Long getNumVersions();
+    @Mapping("currentVersion.templateEntryValues")
+    Set<ExcelExportTemplateEntryView> getTemplateEntries();
+}
+----
+
+== Ordami Linz, Austria
+
+image::ordami.png[width=300, role = "logo"]
+
+* Startup at which Moritz Becker is CTO
+* Online marketplace for gastronomy
+* Using Blaze-Persistence Core for efficient keyset pagination
+* Entity views replaced manual DTOs and reduced the amount of code significantly
+* Integrated Blaze-Persistence in Keycloak for efficient access to user data
+* About to be used indirectly via Blaze-Notify as well
+
+== Pallas Athena Group
+
+image::athena-studies.png[width=300, role = "logo"]
+
+* Jan-Willem Gmeilig Meyling is lead developer at Pallas Athena Group
+* Project AthenaStudies for organizing tutoring and extracurricular courses
+* Expanding portfolio lead to new query performance challenges that required advanced SQL
+* Wasn't using the DBMS features that were appropriate, because of lacking JPQL-support
+* Was in desperate need for recursive CTEs to implement loading a tree efficiently
+* Blaze-Persistence recursive CTE support came to the rescue
+* Combines the power of recursive CTEs with entity views for data scoping
+
+<<<
+
+[, Jan-Willem Gmeilig Meyling]
+""
+Blaze-Persistence enables us to use CTEs to implement security and filtering efficiently in a reusable and easy to maintain way.
+""
+
+== Other Blaze projects
+
+* https://github.com/Blazebit/blaze-storage[Blaze-Storage] is a storage abstraction layer implemented with Java EE technologies
+* Object storage that abstracts away from the concrete backing storage
+* Storage drivers for File-System, FTP. S3 + Swift are in the works
+* Statistics support with quota system to allow developing billing
+* Can be integrated and used as directly within the application
+* Provides JAX-RS REST interfaces and client to use via HTTP directly
+* Deployable as standalone application and has a PoC administration UI
+
+<<<
+
+* https://github.com/Blazebit/blaze-weblink[Blaze-Weblink] is a permalink or URL-shortener service implemented with Java EE technologies
+* Manages and dispatches HTTP permalinks in a pluggable way
+* Register links with an explicit, generated or URL-shortened key
+* Dispatches via redirect or pass-through
+* Links can have expiration time and be restricted via HTTP Headers, Query params or by IP
+* Statistics support is in the works
+* Can be integrated and used as directly within the application
+* Provides JAX-RS REST interfaces and client to use via HTTP directly
+* Deployable as standalone application and has a PoC administration UI
+
+<<<
+
+* https://github.com/Blazebit/blaze-notify[Blaze-Notify] is the newcomer that aims to provide a scalable notification engine
+* Still in very early development, but will be used by Ordami and Curecomp
+* Building blocks to be integrated into application for implementing notification campaigns
+* User-oriented expression language to resolve target audience compiled to JPQL.next expression
+* Channel implementations for SMTP, AWS SES/SNS, Webhook and bounce handling
+* Clustering support and integration with Spring and Java EE technologies
+* Support for fully transactional at-least-once delivery
+* Use advance DBMS features if possible to improve performance i.e. `SKIP LOCKED`
+* Optional templating support with implementation for Freemarker
+
+== Roadmap
+
+* Integration with REST technologies like e.g. GraphQL
+* Window function support and pagination integration
+* Table function support e.g. `generate_series()`
+* `MERGE`/`UPSERT` statement
+* Geospatial types and operations
+* Range/Interval types and operations
+* Lateral joins
+* Custom static metamodel
+* https://github.com/debezium[Debezium] integration to update secondary index servers
+
+== Community & Support
+
+https://blazebit.herokuapp.com[Slack]::
+We have notifications enabled, so just ask questions :)
+
+https://github.com/Blazebit/blaze-persistence/issues[GitHub issues]::
+If you've found a bug or question, just create an issue
+
+https://stackoverflow.com/questions/tagged/blaze-persistence[Stackoverflow]::
+Don't hesitate to ask questions there too, we are listening
+
+https://persistence.blazebit.com/support.html[Commercial support & training]::
+We help you to get the most out of Blaze-Persistence and Hibernate
+
+== Q & A
+
++++<h1 style="text-align: center;">Got questions?</h1>+++
