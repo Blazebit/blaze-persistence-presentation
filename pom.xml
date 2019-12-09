@@ -12,6 +12,7 @@
     <modules>
         <module>feature-overview</module>
         <module>not-your-fathers-dtos</module>
+        <module>graphql-support-relay-pagination</module>
     </modules>
 
 </project>
