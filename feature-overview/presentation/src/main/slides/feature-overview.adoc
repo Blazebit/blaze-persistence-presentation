@@ -1,10 +1,20 @@
 = Blaze-Persistence +++</h1><h2>Tomorrow's JPA, today</h2><h1>+++
-Christian Beikov, Moritz Becker
+Christian Beikov
 :icons: font
 :split:
 :blank: pass:[ +]
 :markstart: pass:[<span class="mark">]
 :markend: pass:[</span>]
+
+== Agenda
+
+* Introduction
+* Problems with ORM/JPA
+* Entity Views
+* Pagination
+* Common table expressions (CTEs)
+* Demo
+* Outlook
 
 == About us
 
@@ -35,11 +45,11 @@ image::moritz_head.png[float="right"]
 
 [%step]
 --
-image::bernd_head.png[float="right"]
+image::jw_head.jpg[float="right"]
 
-* Bernd Artm+++&uuml;+++ller
-* [job]#Designer/Frontend#
-
+* Jan-Willem Gmeilig Meyling
+* [company]#Pallas Athena Group#
+* [job]#Community member#
 --
 
 == What is Blaze-Persistence
@@ -47,7 +57,7 @@ image::bernd_head.png[float="right"]
 image::logo.png[role="logo"]
 
 * Library that builds on top of JPA with deep integration
-* Fluent builder API that is easy to use
+* Fluent query builder API that is easy to use
 * Rich pagination support integrated
 * Entity-Views as painless DTOs
 * Advanced SQL support on top of JPA model
@@ -137,18 +147,20 @@ Leads to a `LazyInitializationExceptions` on invocation of `getName()`
 
 <<<
 
-JPA constructor expressions for DTOs too inflexible?
+JPQL constructor expressions for DTOs too inflexible?
 
 [source,sql]
 ----
 SELECT new com.company.somepackage.dto.MyCatDTO(
     c.name, kitten.name, father.name, mother.name
 ) FROM Cat c
-LEFT JOIN FETCH c.kittens kitten
-LEFT JOIN FETCH kitten.father father
-LEFT JOIN FETCH kitten.mother mother
+LEFT JOIN c.kittens kitten
+LEFT JOIN kitten.father father
+LEFT JOIN kitten.mother mother
 ----
 
+[%step]
+--
 Results in flat objects, no hierarchies possible except you do something like that...
 
 [source,java, role = 'mediumcode']
@@ -162,6 +174,7 @@ entityManager.createQuery(query, MyCatDTO.class)
     .map(entry -> new MyMainCatDTO(entry.getKey(), entry.getValue()))
     .collect(Collectors.toList());
 ----
+--
 
 <<<
 
@@ -198,6 +211,19 @@ SELECT c.id FROM MyCte c
 ----
 --
 
+[%step]
+--
+VALUES clause
+--
+
+[%step]
+--
+[source,sql]
+----
+SELECT c.id FROM (VALUES (1),(2)) v LEFT JOIN Cat c on v.id = c.id
+----
+--
+
 <<<
 
 Having some longstanding problems with the JPA provider that don't seem to get fixed?
@@ -209,7 +235,7 @@ Having some longstanding problems with the JPA provider that don't seem to get f
 
 [%step]
 --
-`HHH-11042`:: Count distinct support for DBMS that don't natively support it
+`HHH-11042`:: Count tuple distinct support for DBMS that don't natively support it
 --
 
 [%step]
@@ -265,7 +291,7 @@ WHERE cat.name LIKE :catName
 
 * Think JPA 2.1 Entity-Graphs are too verbose?
 * Fetch-problems with loading the _"whole"_ database or `LazyInitializationExceptions`?
-* JPA constructor expressions for DTOs too inflexible?
+* JPQL constructor expressions for DTOs too inflexible?
 * Missing support for that one little SQL feature that you really need?
 * Having some longstanding problems with the JPA provider that don't seem to get fixed?
 * Feel like you can't reuse parts of queries and have to duplicate code?
@@ -286,17 +312,20 @@ WHERE cat.name LIKE :catName
 
 == Entity-views
 
-Entity-views are the ORM equivalent of database views.
+A tool to load exactly the needed data in the best way for a use case
 
-* You can use them to optimize entity fetching
-* Most of the time you do not need full entities
-* Querying only the parts you need reduces data transfer
+* Optimize data fetching with fetch strategies (`MULTISET`, `SUBSELECT` etc.)
+* Exactly the data that you need reduces data transfer. No lazy surprises!
+* Separate query logic from projection details
+* Updatable entity view allow flushing data changes back
 
-Some example use cases:
+{blank}
+Use cases are endless...
 
-* Display data in UI
-* Fetch data to be returned in REST resources
-* Partial updates in the works
+* Display data on a server side rendered UI
+* Fetch data to be returned through HTTP endpoints
+* Partial updates through HTTP
+* GraphQL execution engine
 
 == Example View - Basic
 
@@ -460,6 +489,8 @@ GROUP BY
 
 == Example View - Subquery support
 
+`SubqueryProvider` allows custom subqueries through Blaze-Persistence Core builder API
+
 [cols="49a,51a"]
 |===
 |[source,java, role = 'mapping-left']
@@ -554,15 +585,15 @@ LEFT JOIN c.owner owner_1
 Support for many more kinds of mappings
 
 * Collections
-** Support for basic types and subviews
-** Remapping of collection types i.e. `Set` in entity as `List`
+** Support for basic types `Set<String>` and subviews `Set<MySubview>`
+** Remapping of collection types i.e. `Set<MyEntity>` in entity as `List<MySubview>`
 * Correlations
 ** Multiple mapping strategies for ad-hoc relations
 * Inheritance
 ** Elegant mapping of JPA inheritance
 ** Custom selector based inheritance possible
-
-Also support for filtering and sorting based on attributes!
+* Limit joined rows/elements e.g. latest 5
+* Filtering and sorting based on entity view attributes
 
 == Pagination
 
@@ -571,8 +602,10 @@ Blaze-Persistence supports two types of pagination:
 * Offset pagination
 * Keyset pagination
 
+{blank}
 Keyset pagination is preferable to offset pagination since it allows consistent pagination of data while elements are inserted.
 
+{blank}
 Pagination can also be combined with entity-views!
 
 == Offset pagination example
@@ -595,12 +628,14 @@ LEFT JOIN FETCH c.kittens
 ORDER BY c.id
 ----
 
+[%step]
+--
 This will materialize all objects in memory which is inefficient
+--
 
 <<<
 
-But even if `setFirstResult()` and `setMaxResults()` are used,
-JPA implementations tend to load all data when *collection fetches* are involved.
+So let's use `setFirstResult()` and `setMaxResults()` to limit results.
 
 [source,java]
 ----
@@ -613,8 +648,6 @@ query.setMaxResults(10);
 List<Cat> page1 = query.getResultList();
 ----
 
-This will *still* materialize all objects in memory and emit a _warning_ by Hibernate
-
 [source,sql]
 ----
 SELECT c
@@ -623,9 +656,33 @@ LEFT JOIN FETCH c.kittens
 ORDER BY c.id
 ----
 
+[%step]
+--
+This will *still* materialize all objects in memory and emit a _warning_ by Hibernate.
+JPA implementations tend to load all data when *collection fetches* are involved.
+
+`HHH000104: firstResult/maxResults specified with collection fetch; applying in memory!`
+--
+
 <<<
 
 The offset based pagination API of Blaze-Persistence is here to help
+
+[source,java,subs="verbatim,attributes"]
+----
+PagedList<Cat> page1 = cbf.create(em, Cat.class)
+                .fetch("kittens")
+                .orderByAsc("id")
+                {markstart}.page(0, 10){markend}
+                .getResultList();
+----
+
+The use of `page()` will switch to the `PaginatedCriteriaBuilder` which can do better
+
+* `PagedList` subtype gives access to overall count and page configuration
+* Query is split into _id-query_ and _object-query_ only if necessary
+
+<<<
 
 [source,java]
 ----
@@ -636,12 +693,6 @@ PagedList<Cat> page1 = cbf.create(em, Cat.class)
                 .getResultList();
 ----
 
-The use of `page()` will switch to the `PaginatedCriteriaBuilder` which can do better
-
-* `PagedList` subtype gives access to overall count and page configuration
-* Query is split into _id-query_ and _object-query_ only if necessary
-
-<<<
 
 The _count-query_ strips all `SELECT`, `ORDER BY` and unnecessary joins
 
@@ -654,7 +705,7 @@ FROM Cat c
 [cols="a,a"]
 |===
 |
-The _id-query_ strips unnecessary `SELECT` items and joins
+_id-query_ strips `SELECT` items and joins
 
 [source,sql, role = 'mapping-left']
 ----
@@ -666,7 +717,7 @@ ORDER BY c.id
 ----
 
 |
-The _object-query_ strips the `WHERE` clause and unnecessary joins
+_object-query_ strips `WHERE` clause and joins
 
 [source,sql, role = 'mapping-right']
 ----
@@ -680,12 +731,33 @@ ORDER BY c.id
 
 <<<
 
+With inlining, the final query roughly looks like this
+
+[source,sql]
+----
+SELECT
+    c,
+    (SELECT COUNT(*) FROM Cat sub)
+FROM Cat c
+LEFT JOIN FETCH c.kittens
+WHERE c.id IN (
+    SELECT sub.id
+    FROM Cat sub
+    ORDER BY sub.id
+    LIMIT 10
+    OFFSET 0
+)
+ORDER BY c.id
+----
+
+<<<
+
 Fetching only singular relations can be optimized which is properly done
 
-[source,java]
+[source,java,subs="verbatim,attributes"]
 ----
 PagedList<Cat> page1 = cbf.create(em, Cat.class)
-                .fetch("mother")
+                {markstart}.fetch("mother"){markend}
                 .orderByAsc("id")
                 .page(0, 10)
                 .getResultList();
@@ -705,26 +777,28 @@ ORDER BY c.id
 
 To use keyset pagination you have to enable keyset extraction first
 
-[source,java]
+[source,java,subs="verbatim,attributes"]
 ----
 PagedList<Cat> page1 = cbf.create(em, Cat.class)
                 .orderByAsc("id")
                 .page(0, 10)
-                .withKeysetExtraction(true)
+                {markstart}.withKeysetExtraction(true){markend}
                 .getResultList();
 KeysetPage keysetPage = page1.getKeysetPage();
 ----
 
+[%step]
+--
 Providing the `KeysetPage` to subsequent pagination queries can improve performance
 
-[source,java]
+[source,java,subs="verbatim,attributes"]
 ----
 PagedList<Cat> page2 = cbf.create(em, Cat.class)
                 .orderByAsc("id")
-                .page(keysetPage, 10, 10)
-                .withKeysetExtraction(true)
+                {markstart}.page(keysetPage, 10, 10){markend}
                 .getResultList();
 ----
+--
 
 <<<
 
@@ -745,7 +819,7 @@ The query behind the scenes is adapted to include select items for the keyset
 
 [source,sql]
 ----
-SELECT c.name, c.id, c
+SELECT c, c.name, c.id
 FROM Cat c
 ORDER BY c.name, c.id
 -- LIMIT 10
@@ -756,27 +830,30 @@ ORDER BY c.name, c.id
 
 When requesting the next page, the keyset page can serve as bound instead of offset
 
-[source,java]
+[source,java,subs="verbatim,attributes"]
 ----
 PagedList<Cat> page2 = cbf.create(em, Cat.class)
                 .orderByAsc("name")
                 .orderByAsc("id")
-                .page(keysetPage, 10, 10)
+                {markstart}.page(keysetPage, 10, 10){markend}
                 .withKeysetExtraction(true)
                 .getResultList();
 KeysetPage keysetPage = page2.getKeysetPage();
 ----
 
+[%step]
+--
 Instead of using offset to skip elements, this uses the `WHERE` clause
 
 [source,sql]
 ----
-SELECT c.name, c.id, c
+SELECT c, c.name, c.id
 FROM Cat c
 WHERE c.name > :_name OR c.name = :_name AND c.id > :_id
 ORDER BY c.name, c.id
 -- LIMIT 10
 ----
+--
 
 <<<
 
@@ -820,7 +897,8 @@ Page      1       2       3       4       5       6
 <<<
 
 Keyset pagination makes use of the keyset of page 1 as _lower bound_ for page 2.
-Every value greater than `e` obviously is on higher pages.
+{blank}
+Every letter value greater than letter `e` obviously is on higher pages.
 
 [ditaa, nolightbox="true"]
 ....
@@ -850,7 +928,7 @@ Page      1       2       3       4       5       6
 
 <<<
 
-To select the page 2 we query for entries greater than `e`
+To select the page 2 we query for entries with a value greater than letter `e`
 
 [source,sql]
 ----
@@ -917,11 +995,9 @@ When traversing to the previous page i.e. from 3 to 2 it gets a bit complicated
 Page      1       2       3       4       5       6
 ....
 
-To select the page 2 when having 3 we query for entries lower than `k`
+To select page 2 with the bounds of page 3 we need to query for entries with a value lower than letter `k`
 
 <<<
-
-One might think a simple _lower_ check is enough
 
 [source,sql,subs="verbatim,attributes"]
 ----
@@ -931,6 +1007,11 @@ WHERE a.value < 'k'
 ORDER BY a.value ASC
 -- LIMIT 5
 ----
+
+[%step]
+--
+One might think a simple _lower_ check is enough...
+--
 
 [%step]
 --
@@ -976,8 +1057,6 @@ ORDER BY a.value {markstart}DESC{markend}
 -- LIMIT 5
 ----
 
-When _NULL PRECEDENCE_ is involved, the operator has to be inverted too.
-
 [ditaa, nolightbox="true"]
 ....
        +-----+ +-----+ +-----+ +-----+ +-----+ +-----+
@@ -1004,6 +1083,11 @@ When _NULL PRECEDENCE_ is involved, the operator has to be inverted too.
 Page      1       2       3       4       5       6
 ....
 
+[%step]
+--
+When _NULL PRECEDENCE_ is involved, the operator has to be inverted too.
+--
+
 <<<
 
 There are still some missing pieces
@@ -1018,7 +1102,7 @@ All of that is handled transparently for you when using the `PaginatedCriteriaBu
 
 == Common Table Expressions
 
-Common Table Expressions (CTEs) are disposable tables created in memory only for the current statement.
+Common Table Expressions (CTEs) can be thought of as disposable/temporary tables created in memory only for the current statement.
 
 Use cases:
 
@@ -1029,7 +1113,7 @@ CTEs can also be combined with pagination and entity-views!
 
 == CTE example
 
-First we need a _entity_ that represent the structure of the CTE
+First we need an _entity_ that represent the structure of the CTE
 
 [source,java]
 ----
@@ -1061,20 +1145,20 @@ Query building code almost looks like logical representation
 |[source,java, role = 'smallcode-left']
 ----
 cb.withRecursive(CatHierarchyCTE.class)
-    .from(Cat.class)
+
     .bind("id").select("id")
     .bind("motherId").select("mother.id")
     .bind("fatherId").select("father.id")
     .bind("generation").select("0")
-
+    .from(Cat.class)
     .where("id").eqExpression(catId.toString())
 .unionAll()
-    .from(Cat.class, "cat")
-    .from(CatHierarchyCTE.class, "cte")
+
     .bind("id").select("cat.id")
     .bind("motherId").select("cat.mother.id")
     .bind("fatherId").select("cat.father.id")
     .bind("generation").select("cte.generation + 1")
+    .from(Cat.class, "cat").from(CatHierarchyCTE.class, "cte")
     .whereOr()
         .where("cat.id").eqExpression("cte.motherId")
         .where("cat.id").eqExpression("cte.fatherId")
@@ -1099,7 +1183,6 @@ WITH RECURSIVE CatHierarchyCTE(id, motherId, fatherId, generation) AS (
     WHERE cat.id = 1
 UNION ALL
     SELECT
-
         cat.id,
         cat.mother.id,
         cat.father.id,
@@ -1107,6 +1190,7 @@ UNION ALL
     FROM Cat cat, CatHierarchyCTE cte
     WHERE cat.id = cte.motherId
        OR cat.id = cte.fatherId
+
 )
 
 SELECT cat
@@ -1118,8 +1202,6 @@ ORDER BY cte.generation
 |===
 
 <<<
-
-Traverse example graph of cats with ancestors
 
 [source,java, role = 'smallcode']
 ----
@@ -1156,6 +1238,8 @@ digraph g {
     Hillary -> George
 }
 ----
+
+Traverse example graph of cats with ancestors
 
 <<<
 
@@ -1350,12 +1434,14 @@ digraph g {
 
 == Integrations
 
-Hibernate is the only JPA provider that has deep integration right now:
-
-* Fixes/workarounds for known Hibernate bugs + limitations
-* Support for advanced SQL features like CTEs
-
-We provide integrations for CDI and Spring allowing the auto-discovery of entity views.
+* JPA providers like Hibernate and EclipseLink
+* JSON providers like Jackson and JSONB
+* HTTP libraries like JAX-RS, Spring WebMvc and WebFlux
+* Entity view discovery for CDI and Spring
+* Quarkus integration with native support
+* QueryDSL and JPA Criteria API implementations
+* Deltaspike and Spring Data repository integration
+* GraphQL providers like DGS, SPQR and MP GraphQL
 
 == Getting started with CDI
 
@@ -1412,23 +1498,19 @@ public class BlazePersistenceConfiguration {
 
 == Roadmap
 
-// List new features that are about to come
-
-* Updateable entity views
+* Align with new Hibernate 6 features
 * Table function support e.g. `generate_series()`
 * `MERGE`/`UPSERT` statement
 * Geospatial types and operations
 * Range/Interval types and operations
-* Lateral joins
 * Custom static metamodel
-* https://github.com/debezium[Debezium] integration to update secondary index servers via entity views
 
 [canvas-image="images/give_up_on_jpa.jpg"]
 == Don't give up on JPA
 
 == Community & Support
 
-https://blazebit.herokuapp.com[Slack]::
+https://blazebit.zulipchat.com/[Zulip]::
 We have notifications enabled, so just ask questions :)
 
 https://github.com/Blazebit/blaze-persistence/issues[GitHub issues]::

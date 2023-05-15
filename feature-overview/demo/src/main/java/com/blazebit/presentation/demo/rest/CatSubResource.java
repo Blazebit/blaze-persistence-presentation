@@ -18,7 +18,7 @@ package com.blazebit.presentation.demo.rest;
 
 import com.blazebit.persistence.CriteriaBuilder;
 import com.blazebit.persistence.CriteriaBuilderFactory;
-import com.blazebit.persistence.examples.base.model.Cat;
+import com.blazebit.persistence.examples.showcase.base.model.Cat;
 import com.blazebit.persistence.view.EntityViewManager;
 import com.blazebit.persistence.view.EntityViewSetting;
 import com.blazebit.presentation.demo.cte.CatHierarchyCTE;
@@ -70,19 +70,19 @@ public class CatSubResource {
     public <T> List<T> getCatHierarchy(Integer catId, EntityViewSetting<T, CriteriaBuilder<T>> setting) {
         CriteriaBuilder<Tuple> cb = cbf.create(em, Tuple.class)
                 .withRecursive(CatHierarchyCTE.class)
-                    .from(Cat.class)
                     .bind("id").select("id")
                     .bind("motherId").select("mother.id")
                     .bind("fatherId").select("father.id")
                     .bind("generation").select("0")
+                    .from(Cat.class)
                     .where("id").eqExpression(catId.toString())
                 .unionAll()
-                    .from(Cat.class, "cat")
-                    .from(CatHierarchyCTE.class, "cte")
                     .bind("id").select("cat.id")
                     .bind("motherId").select("cat.mother.id")
                     .bind("fatherId").select("cat.father.id")
                     .bind("generation").select("cte.generation + 1")
+                    .from(Cat.class, "cat")
+                    .from(CatHierarchyCTE.class, "cte")
                     .whereOr()
                         .where("cat.id").eqExpression("cte.motherId")
                         .where("cat.id").eqExpression("cte.fatherId")

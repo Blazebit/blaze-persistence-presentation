@@ -23,6 +23,6 @@ import javax.ws.rs.core.Application;
  * @author Moritz Becker (moritz.becker@gmx.at)
  * @since 1.2
  */
-@ApplicationPath("")
+@ApplicationPath("api")
 public class DemoApplication extends Application {
 }

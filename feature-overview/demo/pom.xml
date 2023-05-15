@@ -16,9 +16,9 @@
 
     <properties>
         <version.javaee>7.0</version.javaee>
-        <version.blaze-persistence>1.2.0-SNAPSHOT</version.blaze-persistence>
-        <version.swagger>1.5.10</version.swagger>
-        <version.hibernate>5.0.7.Final</version.hibernate>
+        <version.blaze-persistence>1.6.8</version.blaze-persistence>
+        <version.swagger>1.6.10</version.swagger>
+        <version.hibernate>5.3.28.Final</version.hibernate>
 
         <maven.compiler.source>1.8</maven.compiler.source>
         <maven.compiler.target>1.8</maven.compiler.target>
@@ -28,7 +28,7 @@
         <repository>
             <id>jboss-public-repository-group</id>
             <name>JBoss Public Repository Group</name>
-            <url>http://repository.jboss.org/nexus/content/groups/public/</url>
+            <url>https://repository.jboss.org/nexus/content/groups/public/</url>
             <layout>default</layout>
             <releases>
                 <enabled>true</enabled>
@@ -46,7 +46,7 @@
             <dependency>
                 <groupId>org.wildfly</groupId>
                 <artifactId>wildfly-parent</artifactId>
-                <version>10.0.0.Final</version>
+                <version>26.1.3.Final</version>
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
@@ -95,14 +95,14 @@
         </dependency>
         <dependency>
             <groupId>com.blazebit</groupId>
-            <artifactId>blaze-persistence-integration-hibernate-5</artifactId>
+            <artifactId>blaze-persistence-integration-hibernate-5.3</artifactId>
             <version>${version.blaze-persistence}</version>
             <scope>runtime</scope>
         </dependency>
 
         <dependency>
             <groupId>com.blazebit</groupId>
-            <artifactId>blaze-persistence-showcase-base</artifactId>
+            <artifactId>blaze-persistence-examples-showcase-base</artifactId>
             <version>${version.blaze-persistence}</version>
         </dependency>
 

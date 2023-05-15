@@ -47,7 +47,7 @@ public class SwaggerServlet extends DefaultJaxrsConfig {
         test.setVersion("1.0.0");
         test.setSchemes(new String[]{"http"});
         test.setHost("localhost:8080");
-        test.setBasePath("/");
+        test.setBasePath("/api");
         test.setResourcePackage("com.blazebit.presentation.demo.rest");
         test.setScan(true);
 

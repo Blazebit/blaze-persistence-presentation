@@ -1,6 +1,6 @@
 package com.blazebit.presentation.demo.view;
 
-import com.blazebit.persistence.examples.base.model.Cat;
+import com.blazebit.persistence.examples.showcase.base.model.Cat;
 import com.blazebit.persistence.view.EntityView;
 import com.blazebit.persistence.view.IdMapping;
 

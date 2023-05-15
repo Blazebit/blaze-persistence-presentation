@@ -34,7 +34,7 @@
 
         <start-class>com.blazebit.persistence.examples.spring.data.graphql.Application</start-class>
 
-        <version.blaze-persistence>1.4.0-SNAPSHOT</version.blaze-persistence>
+        <version.blaze-persistence>1.6.8</version.blaze-persistence>
         <version.spring-data-1.x>1.11.10.RELEASE</version.spring-data-1.x>
         <version.spring-data-1.x-spring>4.3.3.RELEASE</version.spring-data-1.x-spring>
         <version.spring-data-1.x-spring-boot>1.5.4.RELEASE</version.spring-data-1.x-spring-boot>

@@ -16,7 +16,7 @@
 
 package com.blazebit.presentation.demo.startup;
 
-import com.blazebit.persistence.examples.base.model.Cat;
+import com.blazebit.persistence.examples.showcase.base.model.Cat;
 
 import javax.annotation.PostConstruct;
 import javax.ejb.Singleton;

@@ -16,10 +16,14 @@
 
 package com.blazebit.presentation.demo.rest;
 
-import com.blazebit.persistence.*;
-import com.blazebit.persistence.examples.base.model.Cat;
-import com.blazebit.persistence.impl.keyset.KeysetImpl;
-import com.blazebit.persistence.impl.keyset.KeysetPageImpl;
+import com.blazebit.persistence.CriteriaBuilder;
+import com.blazebit.persistence.CriteriaBuilderFactory;
+import com.blazebit.persistence.DefaultKeyset;
+import com.blazebit.persistence.DefaultKeysetPage;
+import com.blazebit.persistence.KeysetPage;
+import com.blazebit.persistence.PagedList;
+import com.blazebit.persistence.PaginatedCriteriaBuilder;
+import com.blazebit.persistence.examples.showcase.base.model.Cat;
 import com.blazebit.persistence.view.EntityViewManager;
 import com.blazebit.persistence.view.EntityViewSetting;
 import com.blazebit.presentation.demo.rest.model.PaginatedResult;
@@ -61,16 +65,6 @@ public class CatsResource {
     @Context
     private UriInfo uriInfo;
 
-    /**
-     *
-     * @param page
-     * @param pageSize
-     * @param firstKey optional
-     * @param lastKey optional
-     * @param lastPageOffset optional
-     * @param lastPageSize optional
-     * @return
-     */
     @GET
     @Produces(MediaType.APPLICATION_JSON)
     public PaginatedResult<CatView> getCats(@QueryParam("page") @DefaultValue("1") int page,
@@ -85,7 +79,7 @@ public class CatsResource {
         if (firstKey == null || lastKey == null || lastPageOffset == null || lastPageSize == null) {
             catSetting = EntityViewSetting.create(CatView.class, (page - 1) * pageSize, pageSize);
         } else {
-            KeysetPage keysetPage = new KeysetPageImpl(lastPageOffset, lastPageSize, new KeysetImpl(new Serializable[]{ firstKey }), new KeysetImpl(new Serializable[]{ lastKey }));
+            KeysetPage keysetPage = new DefaultKeysetPage(lastPageOffset, lastPageSize, new DefaultKeyset(new Serializable[]{ firstKey }), new DefaultKeyset(new Serializable[]{ lastKey }));
             catSetting = EntityViewSetting.create(CatView.class, (page - 1) * pageSize, pageSize).withKeysetPage(keysetPage);
         }
 
