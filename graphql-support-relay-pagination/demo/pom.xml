@@ -35,18 +35,18 @@
         <start-class>com.blazebit.persistence.examples.spring.data.graphql.Application</start-class>
 
         <version.blaze-persistence>1.6.8</version.blaze-persistence>
-        <version.spring-data-1.x>1.11.10.RELEASE</version.spring-data-1.x>
-        <version.spring-data-1.x-spring>4.3.3.RELEASE</version.spring-data-1.x-spring>
+        <version.spring-data-1.x>1.11.23.RELEASE</version.spring-data-1.x>
+        <version.spring-data-1.x-spring>4.3.9.RELEASE</version.spring-data-1.x-spring>
         <version.spring-data-1.x-spring-boot>1.5.4.RELEASE</version.spring-data-1.x-spring-boot>
-        <version.spring-data-2.0>2.0.4.RELEASE</version.spring-data-2.0>
+        <version.spring-data-2.0>2.0.14.RELEASE</version.spring-data-2.0>
         <version.spring-data-2.0-spring>5.0.4.RELEASE</version.spring-data-2.0-spring>
         <version.spring-data-2.0-spring-boot>2.0.0.RELEASE</version.spring-data-2.0-spring-boot>
-        <version.spring-data-2.1>2.1.8.RELEASE</version.spring-data-2.1>
+        <version.spring-data-2.1>2.1.21.RELEASE</version.spring-data-2.1>
         <version.spring-data-2.1-spring>5.1.8.RELEASE</version.spring-data-2.1-spring>
         <version.spring-data-2.1-spring-boot>2.1.8.RELEASE</version.spring-data-2.1-spring-boot>
-        <version.spring-data-2.2>2.2.0.RELEASE</version.spring-data-2.2>
-        <version.spring-data-2.2-spring>5.2.0.RC2</version.spring-data-2.2-spring>
-        <version.spring-data-2.2-spring-boot>2.2.0.M6</version.spring-data-2.2-spring-boot>
+        <version.spring-data-2.2>2.2.13.RELEASE</version.spring-data-2.2>
+        <version.spring-data-2.2-spring>5.2.2.RELEASE</version.spring-data-2.2-spring>
+        <version.spring-data-2.2-spring-boot>2.2.2.RELEASE</version.spring-data-2.2-spring-boot>
 
         <version.jaxb>2.2.11</version.jaxb>
         <version.annotation>1.3.2</version.annotation>

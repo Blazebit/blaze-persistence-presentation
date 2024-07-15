@@ -73,13 +73,13 @@ public class CatsResource {
                                             @QueryParam("lastKey") Integer lastKey,
                                             @QueryParam("lastPageOffset") Integer lastPageOffset,
                                             @QueryParam("lastPageSize") Integer lastPageSize) {
-        CriteriaBuilder<Cat> cb = cbf.create(em, Cat.class).orderByAsc("id");
+        CriteriaBuilder<Cat> cb = cbf.create(em, Cat.class).orderByAsc("coalesce(name,'')").orderByAsc("id");
 
         final EntityViewSetting<CatView, PaginatedCriteriaBuilder<CatView>> catSetting;
         if (firstKey == null || lastKey == null || lastPageOffset == null || lastPageSize == null) {
             catSetting = EntityViewSetting.create(CatView.class, (page - 1) * pageSize, pageSize);
         } else {
-            KeysetPage keysetPage = new DefaultKeysetPage(lastPageOffset, lastPageSize, new DefaultKeyset(new Serializable[]{ firstKey }), new DefaultKeyset(new Serializable[]{ lastKey }));
+            KeysetPage keysetPage = new DefaultKeysetPage(lastPageOffset, lastPageSize, new DefaultKeyset(new Serializable[]{ "Daisy - Generation 2", 8 }), new DefaultKeyset(new Serializable[]{ "Hillary - Generation 3",10 }));
             catSetting = EntityViewSetting.create(CatView.class, (page - 1) * pageSize, pageSize).withKeysetPage(keysetPage);
         }
 
